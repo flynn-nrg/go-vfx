@@ -1,2 +1,4 @@
 github.com/flynn-nrg/floatimage v0.0.0-20250505155730-d5a716d7266a h1:1BE7h5B7lurMLZOW/IqAiZ8eNiPpZNOr2HEsldY8+7o=
 github.com/flynn-nrg/floatimage v0.0.0-20250505155730-d5a716d7266a/go.mod h1:/8IMtUjljyew4UOlLunId1h4n66PPPdp2ag525kWPmc=
+github.com/flynn-nrg/floatimage v0.0.0-20250823091259-aa26060097d4 h1:qrKSQafS8LE9VxHu6AFRyOeVVWQ2hA4gES8cPInfwj4=
+github.com/flynn-nrg/floatimage v0.0.0-20250823091259-aa26060097d4/go.mod h1:/8IMtUjljyew4UOlLunId1h4n66PPPdp2ag525kWPmc=

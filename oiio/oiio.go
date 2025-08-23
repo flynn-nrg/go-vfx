@@ -20,11 +20,42 @@ import (
 	"github.com/flynn-nrg/floatimage/floatimage"
 )
 
-const (
-	convertedNumChannels = 4
-)
+func ReadImage32(filename string) (*floatimage.Float32NRGBA, error) {
+	cFilename := C.CString(filename)
+	defer C.free(unsafe.Pointer(cFilename))
 
-func ReadImage(filename string) (*floatimage.FloatNRGBA, error) {
+	var errorMsg *C.char
+	cImage := C.read_image(cFilename, &errorMsg)
+	if cImage == nil {
+		if errorMsg != nil {
+			err := C.GoString(errorMsg)
+			C.free(unsafe.Pointer(errorMsg))
+			return nil, fmt.Errorf("failed to read image: %s", err)
+		}
+		return nil, fmt.Errorf("failed to read image")
+	}
+	defer C.free_image(cImage)
+
+	width := int(cImage.width)
+	height := int(cImage.height)
+	numChannels := int(cImage.channels)
+	cData := (*[1 << 30]C.float)(unsafe.Pointer(cImage.data))[: width*height*numChannels : width*height*numChannels]
+
+	var data []float32
+
+	switch cImage.channels {
+	case 3:
+		data = toRGB32Slice(cData, width, height)
+	case 4:
+		data = toRGBA32Slice(cData, width, height, numChannels)
+	default:
+		return nil, fmt.Errorf("unsupported number of channels: %d", cImage.channels)
+	}
+
+	return floatimage.NewFloat32NRGBA(image.Rect(0, 0, width, height), data), nil
+}
+
+func ReadImage64(filename string) (*floatimage.Float64NRGBA, error) {
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
 
@@ -49,14 +80,14 @@ func ReadImage(filename string) (*floatimage.FloatNRGBA, error) {
 
 	switch cImage.channels {
 	case 3:
-		data = toRGBSlice(cData, width, height)
+		data = toRGB64Slice(cData, width, height)
 	case 4:
-		data = toRGBASlice(cData, width, height, numChannels)
+		data = toRGBA64Slice(cData, width, height, numChannels)
 	default:
 		return nil, fmt.Errorf("unsupported number of channels: %d", cImage.channels)
 	}
 
-	return floatimage.NewFloatNRGBA(image.Rect(0, 0, width, height), data), nil
+	return floatimage.NewFloat64NRGBA(image.Rect(0, 0, width, height), data), nil
 }
 
 // isHDR returns true if the file extension indicates an HDR format
@@ -111,16 +142,37 @@ func toCImage(image image.Image, isHDRFormat bool) *C.Image {
 	cImage.width = C.int(width)
 	cImage.height = C.int(height)
 	cImage.channels = C.int(numChannels)
-	cImage.data = (*C.float)(C.malloc(C.size_t(width) * C.size_t(height) * C.size_t(numChannels) * C.size_t(unsafe.Sizeof(float64(0)))))
+	cImage.data = (*C.float)(C.malloc(C.size_t(width) * C.size_t(height) * C.size_t(numChannels) * C.size_t(unsafe.Sizeof(float32(0)))))
 
 	// Convert to a slice for easier access
 	data := (*[1 << 30]C.float)(unsafe.Pointer(cImage.data))[: width*height*numChannels : width*height*numChannels]
 
 	switch image := image.(type) {
-	case *floatimage.FloatNRGBA:
+	case *floatimage.Float32NRGBA:
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
-				c := image.FloatNRGBAAt(x, y)
+				c := image.Float32NRGBAAt(x, y)
+				idx := ((y-bounds.Min.Y)*width + (x - bounds.Min.X)) * numChannels
+				if isHDRFormat {
+					// For HDR formats, pass the values directly
+					data[idx] = C.float(c.R)
+					data[idx+1] = C.float(c.G)
+					data[idx+2] = C.float(c.B)
+					data[idx+3] = C.float(c.A)
+				} else {
+					// For LDR formats, apply gamma correction and scale to [0,1]
+					gamma := 2.2
+					data[idx] = C.float(math.Pow(math.Min(1.0, math.Max(0.0, float64(c.R))), 1.0/gamma))
+					data[idx+1] = C.float(math.Pow(math.Min(1.0, math.Max(0.0, float64(c.G))), 1.0/gamma))
+					data[idx+2] = C.float(math.Pow(math.Min(1.0, math.Max(0.0, float64(c.B))), 1.0/gamma))
+					data[idx+3] = C.float(math.Min(1.0, math.Max(0.0, float64(c.A))))
+				}
+			}
+		}
+	case *floatimage.Float64NRGBA:
+		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+			for x := bounds.Min.X; x < bounds.Max.X; x++ {
+				c := image.Float64NRGBAAt(x, y)
 				idx := ((y-bounds.Min.Y)*width + (x - bounds.Min.X)) * numChannels
 				if isHDRFormat {
 					// For HDR formats, pass the values directly
@@ -144,10 +196,10 @@ func toCImage(image image.Image, isHDRFormat bool) *C.Image {
 				r, g, b, a := image.At(x, y).RGBA()
 				idx := ((y-bounds.Min.Y)*width + (x - bounds.Min.X)) * numChannels
 				// Convert from 16-bit RGBA to float in range [0,1]
-				data[idx] = C.float(float64(r) / 65535.0)
-				data[idx+1] = C.float(float64(g) / 65535.0)
-				data[idx+2] = C.float(float64(b) / 65535.0)
-				data[idx+3] = C.float(float64(a) / 65535.0)
+				data[idx] = C.float(float32(r) / 65535.0)
+				data[idx+1] = C.float(float32(g) / 65535.0)
+				data[idx+2] = C.float(float32(b) / 65535.0)
+				data[idx+3] = C.float(float32(a) / 65535.0)
 			}
 		}
 	}
@@ -155,7 +207,34 @@ func toCImage(image image.Image, isHDRFormat bool) *C.Image {
 	return cImage
 }
 
-func toRGBASlice(cData []C.float, width int, height int, numChannels int) []float64 {
+func toRGBA32Slice(cData []C.float, width int, height int, numChannels int) []float32 {
+
+	data := make([]float32, width*height*numChannels)
+	for i := 0; i < len(cData); i++ {
+		data[i] = float32(cData[i])
+	}
+	return data
+}
+
+func toRGB32Slice(cData []C.float, width int, height int) []float32 {
+	data := make([]float32, width*height*4)
+
+	j := 0
+
+	for i := 0; i < len(data); i += 4 {
+		data[i] = float32(cData[j])
+		j++
+		data[i+1] = float32(cData[j])
+		j++
+		data[i+2] = float32(cData[j])
+		j++
+		data[i+3] = 1.0 // alpha channel is always 1.0
+	}
+
+	return data
+}
+
+func toRGBA64Slice(cData []C.float, width int, height int, numChannels int) []float64 {
 
 	data := make([]float64, width*height*numChannels)
 	for i := 0; i < len(cData); i++ {
@@ -164,7 +243,7 @@ func toRGBASlice(cData []C.float, width int, height int, numChannels int) []floa
 	return data
 }
 
-func toRGBSlice(cData []C.float, width int, height int) []float64 {
+func toRGB64Slice(cData []C.float, width int, height int) []float64 {
 	data := make([]float64, width*height*4)
 
 	j := 0

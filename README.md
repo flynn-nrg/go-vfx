@@ -36,14 +36,14 @@ import (
 )
 
 func main() {
-	floatImage, err := oiio.ReadImage("test.exr")
+	floatImage32, err := oiio.ReadImage32("test.exr")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("image size: %d x %d\n", floatImage.Bounds().Dx(), floatImage.Bounds().Dy())
+	fmt.Printf("image size: %d x %d\n", floatImage32.Bounds().Dx(), floatImage32.Bounds().Dy())
 
-	if err := oiio.WriteImage("test.png", floatImage); err != nil {
+	if err := oiio.WriteImage("test.png", floatImage32); err != nil {
 		log.Fatal(err)
 	}
 }
