@@ -1,7 +1,4 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
-name: Go
+name: Go Modules CI
 
 on:
   push:
@@ -10,7 +7,6 @@ on:
     branches: [ "main" ]
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
     steps:
@@ -19,7 +15,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.23'
+        go-version: '1.24'
 
     - name: Install OpenImageIO Dependencies
       run: |
@@ -27,8 +23,27 @@ jobs:
         sudo apt-get install -y libopenimageio-dev
         sudo apt-get install -y libfmt-dev
 
-    - name: Build
-      run: go build -v ./...
+    - name: Get a list of modules
+      id: modules
+      run: |
+        # Find all directories that contain a go.mod file
+        # The '|| true' allows the command to not fail if no modules are found
+        find . -name "go.mod" -printf '%h\n' > modules.txt || true
+        # Create a JSON array of the module paths for the matrix strategy
+        jq -R -s -c 'split("\n") | map(select(. != ""))' modules.txt > modules.json
 
-    - name: Test
-      run: go test -v ./...
+    - name: Run build and tests for each module
+      run: |
+        # Use a for loop to iterate over each module directory
+        while IFS= read -r module_dir; do
+          if [ -n "$module_dir" ]; then
+            echo "--- Building and testing in module: $module_dir ---"
+            cd "$module_dir"
+            go mod tidy
+            go build -v ./...
+            go test -v ./...
+            cd - # Go back to the root directory
+          fi
+        done < modules.txt
+      # We skip this step if no modules were found
+      if: success()

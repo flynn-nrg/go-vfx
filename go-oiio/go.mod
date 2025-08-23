@@ -1,4 +1,4 @@
-module github.com/flynn-nrg/go-oiio
+module github.com/flynn-nrg/go-vfx/go-oiio
 
 go 1.24.2
 
