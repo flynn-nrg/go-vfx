@@ -41,7 +41,7 @@ func Exp(x float32) float32 {
 
 	// Check for overflow/underflow
 	if x > expOverflow {
-		return float32(math.Inf(1)) // Overflow to +Inf
+		return Inf(1) // Overflow to +Inf
 	}
 
 	if x < expUnderflow {
@@ -119,9 +119,9 @@ func ldexp32(x float32, exp int32) float32 {
 	if newExp >= 0xFF {
 		// Overflow to infinity
 		if bits&0x80000000 != 0 {
-			return float32(math.Inf(-1))
+			return Inf(-1)
 		}
-		return float32(math.Inf(1))
+		return Inf(1)
 	}
 
 	// Check for underflow
@@ -130,7 +130,7 @@ func ldexp32(x float32, exp int32) float32 {
 		if newExp <= -24 {
 			// Too small, return zero with correct sign
 			if bits&0x80000000 != 0 {
-				return float32(math.Copysign(0, -1))
+				return Copysign(0, -1)
 			}
 			return 0
 		}

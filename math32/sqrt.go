@@ -1,7 +1,5 @@
 package math32
 
-import "math"
-
 // Sqrt returns the square root of x.
 //
 // Special cases are:
@@ -19,8 +17,8 @@ func Sqrt(x float32) float32 {
 	case x == 0 || x != x: // ±0 or NaN
 		return x
 	case x < 0:
-		return float32(math.NaN())
-	case math.IsInf(float64(x), 1):
+		return NaN()
+	case IsInf(x, 1):
 		return x
 	}
 

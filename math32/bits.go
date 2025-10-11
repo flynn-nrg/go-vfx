@@ -72,3 +72,24 @@ func Signbit(x float32) bool {
 func NaN() float32 {
 	return math.Float32frombits(0x7FC00000) // Standard quiet NaN
 }
+
+// Inf returns positive infinity if sign >= 0, negative infinity if sign < 0.
+func Inf(sign int) float32 {
+	if sign >= 0 {
+		return math.Float32frombits(0x7F800000) // +Inf
+	}
+	return math.Float32frombits(0xFF800000) // -Inf
+}
+
+// Copysign returns a value with the magnitude of x and the sign of y.
+func Copysign(x, y float32) float32 {
+	const signBit = 1 << 31
+
+	xBits := math.Float32bits(x)
+	yBits := math.Float32bits(y)
+
+	// Clear sign bit from x, get sign bit from y
+	result := (xBits &^ signBit) | (yBits & signBit)
+
+	return math.Float32frombits(result)
+}

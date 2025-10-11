@@ -1,7 +1,5 @@
 package math32
 
-import "math"
-
 // Atan returns the arctangent, in radians, of x.
 //
 // Special cases are:
@@ -110,7 +108,7 @@ func atanPoly(x float32) float32 {
 func Atan2(y, x float32) float32 {
 	// Handle NaN
 	if IsNaN(y) || IsNaN(x) {
-		return float32(math.NaN())
+		return NaN()
 	}
 
 	// Handle y = ±Inf
@@ -143,7 +141,7 @@ func Atan2(y, x float32) float32 {
 			return 0
 		}
 		if y < 0 {
-			return float32(math.Copysign(0, -1)) // -0
+			return Copysign(0, -1) // -0
 		}
 		return y // ±0
 	}

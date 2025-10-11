@@ -1,7 +1,5 @@
 package math32
 
-import "math"
-
 // Asin returns the arcsine, in radians, of x.
 //
 // Special cases are:
@@ -28,7 +26,7 @@ func Asin(x float32) float32 {
 
 	// Out of domain
 	if x > 1 {
-		return float32(math.NaN())
+		return NaN()
 	}
 
 	var result float32
@@ -92,7 +90,7 @@ func Acos(x float32) float32 {
 
 	// Out of domain
 	if x < -1 || x > 1 {
-		return float32(math.NaN())
+		return NaN()
 	}
 
 	// Special cases for exact values

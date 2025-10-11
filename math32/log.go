@@ -27,7 +27,7 @@ func Log(x float32) float32 {
 	}
 
 	if x == 0 {
-		return float32(math.Inf(-1)) // log(0) = -Inf
+		return Inf(-1) // log(0) = -Inf
 	}
 
 	if IsInf(x, 1) {
