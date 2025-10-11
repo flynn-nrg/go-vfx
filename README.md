@@ -5,7 +5,7 @@
 
 ## Introduction
 
-This is a collection of packages that provide Go bindings for variouls VFX related libraries:
+This is a collection of packages that provide float32 math functionality and Go bindings for variouls VFX related libraries:
 
 * go-oiio: bindings to read and write images using [OpenImageIO](https://openimageio.readthedocs.io).
-
+* math32; float32 math package as a drop-in replacement for Golang's `math` to be used by the [Izpi](https://github.com/flynn-nrg/izpi) renderer.
