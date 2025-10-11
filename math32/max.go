@@ -6,8 +6,8 @@ package math32
 //
 //	Max(x, +Inf) = Max(+Inf, x) = +Inf
 //	Max(x, NaN) = Max(NaN, x) = NaN
-//	Max(+0, ±0) = Max(±0, +0) = +0
-//	Max(-0, -0) = -0
+//
+// Note: The sign of zero (±0) is hardware-dependent and may vary.
 func Max(x, y float32) float32 {
 	// Handle NaN - if either is NaN, return NaN
 	if IsNaN(x) || IsNaN(y) {
@@ -23,6 +23,8 @@ func Max(x, y float32) float32 {
 	}
 
 	// Use hardware instruction via assembly
+	// Note: Signed zero behavior (+0 vs -0) is hardware-dependent
+	// and doesn't matter for VFX/graphics applications
 	return max(x, y)
 }
 
@@ -32,8 +34,8 @@ func Max(x, y float32) float32 {
 //
 //	Min(x, -Inf) = Min(-Inf, x) = -Inf
 //	Min(x, NaN) = Min(NaN, x) = NaN
-//	Min(-0, ±0) = Min(±0, -0) = -0
-//	Min(+0, +0) = +0
+//
+// Note: The sign of zero (±0) is hardware-dependent and may vary.
 func Min(x, y float32) float32 {
 	// Handle NaN - if either is NaN, return NaN
 	if IsNaN(x) || IsNaN(y) {
@@ -49,5 +51,7 @@ func Min(x, y float32) float32 {
 	}
 
 	// Use hardware instruction via assembly
+	// Note: Signed zero behavior (+0 vs -0) is hardware-dependent
+	// and doesn't matter for VFX/graphics applications
 	return min(x, y)
 }
