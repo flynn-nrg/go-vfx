@@ -9,17 +9,15 @@ TEXT ·dot(SB),NOSPLIT,$0-28
 	FMOVS	v1Y+4(FP), F1
 	FMOVS	v1Z+8(FP), F2
 	
-	// Multiply by v2 components
+	// Load v2 components
 	FMOVS	v2X+12(FP), F3
-	FMULS	F3, F0, F0        // F0 = v1.X * v2.X
-	FMOVS	v2Y+16(FP), F3
-	FMULS	F3, F1, F1        // F1 = v1.Y * v2.Y
-	FMOVS	v2Z+20(FP), F3
-	FMULS	F3, F2, F2        // F2 = v1.Z * v2.Z
+	FMOVS	v2Y+16(FP), F4
+	FMOVS	v2Z+20(FP), F5
 	
-	// Sum the results
-	FADDS	F1, F0, F0        // F0 = F0 + F1
-	FADDS	F2, F0, F0        // F0 = F0 + F2
+	// Use FMA: FMADDS Rm, Ra, Rn, Rd -> Rd = Ra + (Rn * Rm)
+	FMULS	F3, F0, F0        // F0 = v1.X * v2.X
+	FMADDS	F4, F0, F1, F0    // F0 = F0 + (F1 * F4) = F0 + (v1.Y * v2.Y)
+	FMADDS	F5, F0, F2, F0    // F0 = F0 + (F2 * F5) = F0 + (v1.Z * v2.Z)
 	
 	FMOVS	F0, ret+24(FP)
 	RET

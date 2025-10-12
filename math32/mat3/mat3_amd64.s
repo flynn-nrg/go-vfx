@@ -1,4 +1,4 @@
-//go:build amd64
+//go:build amd64.v3 
 
 #include "textflag.h"
 
@@ -9,35 +9,29 @@ TEXT ·matrixVectorMul(SB),NOSPLIT,$0-52
 	MOVSS	vY+40(FP), X4
 	MOVSS	vZ+44(FP), X5
 	
-	// Calculate first row: a11*vX + a12*vY + a13*vZ
+	// Calculate first row: a11*vX + a12*vY + a13*vZ using FMA
 	MOVSS	a11+0(FP), X0
-	MULSS	X3, X0            // X0 = a11 * vX
 	MOVSS	a12+4(FP), X1
-	MULSS	X4, X1            // X1 = a12 * vY
-	ADDSS	X1, X0            // X0 = X0 + X1
-	MOVSS	a13+8(FP), X1
-	MULSS	X5, X1            // X1 = a13 * vZ
-	ADDSS	X1, X0            // X0 = final X
+	MOVSS	a13+8(FP), X2
+	MULSS	X3, X0            // X0 = a11 * vX
+	VFMADD231SS	X4, X1, X0    // X0 = X0 + (X1 * X4) = X0 + (a12 * vY)
+	VFMADD231SS	X5, X2, X0    // X0 = X0 + (X2 * X5) = X0 + (a13 * vZ)
 	
-	// Calculate second row: a21*vX + a22*vY + a23*vZ
+	// Calculate second row: a21*vX + a22*vY + a23*vZ using FMA
 	MOVSS	a21+12(FP), X1
-	MULSS	X3, X1            // X1 = a21 * vX
 	MOVSS	a22+16(FP), X2
-	MULSS	X4, X2            // X2 = a22 * vY
-	ADDSS	X2, X1            // X1 = X1 + X2
-	MOVSS	a23+20(FP), X2
-	MULSS	X5, X2            // X2 = a23 * vZ
-	ADDSS	X2, X1            // X1 = final Y
+	MOVSS	a23+20(FP), X6
+	MULSS	X3, X1            // X1 = a21 * vX
+	VFMADD231SS	X4, X2, X1    // X1 = X1 + (X2 * X4) = X1 + (a22 * vY)
+	VFMADD231SS	X5, X6, X1    // X1 = X1 + (X6 * X5) = X1 + (a23 * vZ)
 	
-	// Calculate third row: a31*vX + a32*vY + a33*vZ
+	// Calculate third row: a31*vX + a32*vY + a33*vZ using FMA
 	MOVSS	a31+24(FP), X2
-	MULSS	X3, X2            // X2 = a31 * vX
 	MOVSS	a32+28(FP), X6
-	MULSS	X4, X6            // X6 = a32 * vY
-	ADDSS	X6, X2            // X2 = X2 + X6
-	MOVSS	a33+32(FP), X6
-	MULSS	X5, X6            // X6 = a33 * vZ
-	ADDSS	X6, X2            // X2 = final Z
+	MOVSS	a33+32(FP), X7
+	MULSS	X3, X2            // X2 = a31 * vX
+	VFMADD231SS	X4, X6, X2    // X2 = X2 + (X6 * X4) = X2 + (a32 * vY)
+	VFMADD231SS	X5, X7, X2    // X2 = X2 + (X7 * X5) = X2 + (a33 * vZ)
 	
 	// Store results
 	MOVSS	X0, ret0+48(FP)
