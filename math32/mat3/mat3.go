@@ -1,0 +1,41 @@
+// Package mat3 implements functions to work with 3x3 matrices.
+package mat3
+
+import "github.com/flynn-nrg/go-vfx/math32/vec3"
+
+type Mat3 struct {
+	A11 float32
+	A12 float32
+	A13 float32
+	A21 float32
+	A22 float32
+	A23 float32
+	A31 float32
+	A32 float32
+	A33 float32
+}
+
+// NewTBN returns a new matrix made from the supplied tagent, bitangent and normal vectors.
+func NewTBN(tangent, bitangent, normal *vec3.Vec3Impl) *Mat3 {
+	return &Mat3{
+		A11: tangent.X,
+		A12: bitangent.X,
+		A13: normal.X,
+		A21: tangent.Y,
+		A22: bitangent.Y,
+		A23: normal.Y,
+		A31: tangent.Z,
+		A32: bitangent.Z,
+		A33: normal.Z,
+	}
+}
+
+// MatrixVectorMul returns the result of axv, where a is a matrix and v is a vector.
+func MatrixVectorMul(a *Mat3, v *vec3.Vec3Impl) *vec3.Vec3Impl {
+	x, y, z := matrixVectorMul(a.A11, a.A12, a.A13, a.A21, a.A22, a.A23, a.A31, a.A32, a.A33, v.X, v.Y, v.Z)
+	return &vec3.Vec3Impl{
+		X: x,
+		Y: y,
+		Z: z,
+	}
+}
