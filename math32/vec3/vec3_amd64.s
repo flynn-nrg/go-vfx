@@ -1,4 +1,4 @@
-//go:build amd64
+//go:build amd64.v3
 
 #include "textflag.h"
 
@@ -9,14 +9,16 @@ TEXT ·dot(SB),NOSPLIT,$0-28
 	MOVSS	v1Y+4(FP), X1
 	MOVSS	v1Z+8(FP), X2
 	
-	// Load v2 components and multiply
-	MULSS	v2X+12(FP), X0    // X0 = v1.X * v2.X
-	MULSS	v2Y+16(FP), X1    // X1 = v1.Y * v2.Y
-	MULSS	v2Z+20(FP), X2    // X2 = v1.Z * v2.Z
+	// Load v2 components
+	MOVSS	v2X+12(FP), X3
+	MOVSS	v2Y+16(FP), X4
+	MOVSS	v2Z+20(FP), X5
 	
-	// Sum the results
-	ADDSS	X1, X0            // X0 = X0 + X1
-	ADDSS	X2, X0            // X0 = X0 + X2
+	// Use FMA (requires GOAMD64=v3): VFMADD231SS multiplier, multiplicand, accumulator
+	// VFMADD231SS: dest = dest + (src1 * src2)
+	MULSS	X3, X0            // X0 = v1.X * v2.X
+	VFMADD231SS	X4, X1, X0    // X0 = X0 + (X1 * X4) = X0 + (v1.Y * v2.Y)
+	VFMADD231SS	X5, X2, X0    // X0 = X0 + (X2 * X5) = X0 + (v1.Z * v2.Z)
 	
 	MOVSS	X0, ret+24(FP)
 	RET
