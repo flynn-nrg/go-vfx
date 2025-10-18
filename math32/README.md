@@ -24,7 +24,8 @@ This package provides a float32 math package as a drop-in replacement for Golang
 
 ### Exponential and Logarithmic
 * Exp - Exponential (e^x)
-* Log - Natural logarithm 
+* Log - Natural logarithm
+* Pow - Power function (x^y) 
 
 ### Rounding Functions
 * Floor - Round down (hardware accelerated: ARM64 FRINTMS, AMD64 ROUNDSS)
