@@ -55,12 +55,12 @@ func ReadImage32(filename string) (*floatimage.Float32NRGBA, error) {
 	return floatimage.NewFloat32NRGBA(image.Rect(0, 0, width, height), data), nil
 }
 
-// ReadImage32Aces reads an image and converts it to ACEScg (AP1) color space using OpenColorIO.
+// ReadImageACES reads an image and converts it to ACEScg (AP1) color space using OpenColorIO.
 // This function uses OIIO's built-in OCIO integration to:
 // 1. Interpret the source image as "Utility - sRGB - Texture" (linearizes and applies correct primaries)
 // 2. Convert to ACEScg working color space
 // Note: Requires an OCIO configuration to be available (via OCIO env var or OIIO defaults)
-func ReadImage32Aces(filename string) (*floatimage.Float32NRGBA, error) {
+func ReadImageACES(filename string) (*floatimage.Float32NRGBA, error) {
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
 
@@ -166,6 +166,101 @@ func WriteImage(filename string, image image.Image) error {
 			return errors.New(C.GoString(cError))
 		}
 		return errors.New("failed to write image")
+	}
+
+	return nil
+}
+
+// ACESMetadata contains metadata for ACES/EXR output
+type ACESMetadata struct {
+	// DisplayWindow defines the full canvas (displayX, displayY, displayWidth, displayHeight)
+	DisplayWindow image.Rectangle
+
+	// DataWindow defines the actual pixel data region (can be subset of display window)
+	DataWindow image.Rectangle
+
+	// PixelAspectRatio defines the pixel aspect ratio (1.0 for square pixels, 2.0 for 2x anamorphic, etc.)
+	// Common values: 1.0 (square), 2.0 (2x anamorphic), 1.5 (1.5x anamorphic)
+	PixelAspectRatio float32
+
+	// Timecode is optional SMPTE timecode (e.g., "01:23:45:12")
+	Timecode string
+
+	// ACESVersion specifies the ACES version (e.g., "ACES 1.3")
+	ACESVersion string
+}
+
+// WriteImageACES writes an image in ACEScg color space with full ACES metadata.
+// The image data should already be in ACEScg color space (e.g., from ReadImage32Aces).
+// Output is always in EXR format with embedded metadata including:
+// - oiio:ColorSpace = "ACEScg"
+// - Display window and data window
+// - Optional timecode
+// - ACES version
+func WriteImageACES(filename string, img image.Image, metadata *ACESMetadata) error {
+	// Ensure .exr extension
+	if !strings.HasSuffix(strings.ToLower(filename), ".exr") {
+		filename += ".exr"
+	}
+
+	cFilename := C.CString(filename)
+	defer C.free(unsafe.Pointer(cFilename))
+
+	var cError *C.char
+	defer func() {
+		if cError != nil {
+			C.free(unsafe.Pointer(cError))
+		}
+	}()
+
+	// Convert image to C format (always HDR for ACES)
+	cImage := toCImage(img, true)
+	defer C.free_image(cImage)
+
+	// Prepare metadata
+	var cMetadata C.ACESMetadata
+
+	// Set display window
+	cMetadata.display_x = C.int(metadata.DisplayWindow.Min.X)
+	cMetadata.display_y = C.int(metadata.DisplayWindow.Min.Y)
+	cMetadata.display_width = C.int(metadata.DisplayWindow.Dx())
+	cMetadata.display_height = C.int(metadata.DisplayWindow.Dy())
+
+	// Set data window
+	cMetadata.data_x = C.int(metadata.DataWindow.Min.X)
+	cMetadata.data_y = C.int(metadata.DataWindow.Min.Y)
+	cMetadata.data_width = C.int(metadata.DataWindow.Dx())
+	cMetadata.data_height = C.int(metadata.DataWindow.Dy())
+
+	// Set pixel aspect ratio (default to 1.0 if not set)
+	pixelAspectRatio := metadata.PixelAspectRatio
+	if pixelAspectRatio == 0 {
+		pixelAspectRatio = 1.0
+	}
+	cMetadata.pixel_aspect_ratio = C.float(pixelAspectRatio)
+
+	// Set optional timecode
+	var cTimecode *C.char
+	if metadata.Timecode != "" {
+		cTimecode = C.CString(metadata.Timecode)
+		defer C.free(unsafe.Pointer(cTimecode))
+	}
+	cMetadata.timecode = cTimecode
+
+	// Set ACES version
+	var cAcesVersion *C.char
+	if metadata.ACESVersion != "" {
+		cAcesVersion = C.CString(metadata.ACESVersion)
+		defer C.free(unsafe.Pointer(cAcesVersion))
+	}
+	cMetadata.aces_version = cAcesVersion
+
+	// Write image with ACES metadata
+	if ret := C.write_image_aces(cFilename, cImage, &cMetadata, &cError); ret != 0 {
+		if cError != nil {
+			return errors.New(C.GoString(cError))
+		}
+		return errors.New("failed to write ACES image")
 	}
 
 	return nil

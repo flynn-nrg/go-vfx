@@ -130,3 +130,75 @@ int write_image(const char *filename, Image *image, char **error_msg, int hdr) {
   out->close();
   return 0;
 }
+
+// Write image in ACEScg color space with metadata
+int write_image_aces(const char *filename, Image *image, ACESMetadata *metadata,
+                     char **error_msg) {
+  std::unique_ptr<ImageOutput> out = ImageOutput::create(filename);
+  if (!out) {
+    *error_msg = strdup("Could not create ImageOutput for ACES");
+    return 1;
+  }
+
+  ImageSpec spec;
+  spec.width = image->width;
+  spec.height = image->height;
+  spec.nchannels = image->channels;
+  spec.format = TypeDesc::FLOAT; // Always use float for ACES/EXR
+  spec.channelnames = {"R", "G", "B", "A"};
+
+  // Set color space to ACEScg
+  spec.attribute("oiio:ColorSpace", "ACEScg");
+
+  // Set ACEScg (AP1) chromaticities
+  float chromaticities[8] = {
+      0.713f,   0.300f,  // Red primary
+      0.165f,   0.830f,  // Green primary
+      0.128f,   0.044f,  // Blue primary
+      0.32168f, 0.33767f // White point (D60)
+  };
+  spec.attribute("chromaticities", TypeDesc(TypeDesc::FLOAT, 8),
+                 chromaticities);
+
+  // Set display window (full canvas) and pixel aspect ratio
+  spec.attribute("PixelAspectRatio", metadata->pixel_aspect_ratio);
+  spec.full_x = metadata->display_x;
+  spec.full_y = metadata->display_y;
+  spec.full_width = metadata->display_width;
+  spec.full_height = metadata->display_height;
+
+  // Set data window (actual pixel data region)
+  spec.x = metadata->data_x;
+  spec.y = metadata->data_y;
+  spec.width = metadata->data_width;
+  spec.height = metadata->data_height;
+
+  // Set timecode if provided
+  if (metadata->timecode && strlen(metadata->timecode) > 0) {
+    spec.attribute("smpte:TimeCode", metadata->timecode);
+  }
+
+  // Set ACES version as custom attribute
+  if (metadata->aces_version && strlen(metadata->aces_version) > 0) {
+    spec.attribute("aces:version", metadata->aces_version);
+  }
+
+  // Add standard ACES metadata
+  spec.attribute("compression", "zip"); // Standard compression for ACES EXR
+  spec.attribute("openexr:lineOrder", "increasing");
+
+  if (!out->open(filename, spec)) {
+    *error_msg = strdup(out->geterror().c_str());
+    return 1;
+  }
+
+  // Write float data directly (no conversion needed for EXR)
+  if (!out->write_image(TypeDesc::FLOAT, image->data)) {
+    *error_msg = strdup(out->geterror().c_str());
+    out->close();
+    return 1;
+  }
+
+  out->close();
+  return 0;
+}
