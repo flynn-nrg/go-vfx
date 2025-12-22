@@ -1,4 +1,6 @@
 #include "oiio_wrapper.h"
+#include <OpenImageIO/imagebuf.h>
+#include <OpenImageIO/imagebufalgo.h>
 #include <OpenImageIO/imageio.h>
 
 using namespace OIIO;
@@ -32,6 +34,50 @@ Image *read_image(const char *filename, char **error_msg) {
   }
 
   inp->close();
+  return image;
+}
+
+// Read image and convert to ACEScg (AP1) color space using OCIO
+Image *read_image_aces(const char *filename, char **error_msg) {
+  Image *image = new Image();
+
+  // Read image into an ImageBuf
+  ImageBuf src(filename);
+  if (src.has_error()) {
+    *error_msg = strdup(src.geterror().c_str());
+    delete image;
+    return nullptr;
+  }
+
+  const ImageSpec &spec = src.spec();
+  int xres = spec.width;
+  int yres = spec.height;
+  int nchannels = spec.nchannels;
+
+  // Perform color conversion from sRGB to ACEScg using OCIO
+  // "Utility - sRGB - Texture" is the typical name for sRGB texture space in
+  // ACES configs
+  ImageBuf dst;
+  if (!ImageBufAlgo::colorconvert(dst, src, "Utility - sRGB - Texture",
+                                  "ACEScg")) {
+    *error_msg = strdup(dst.geterror().c_str());
+    delete image;
+    return nullptr;
+  }
+
+  image->width = xres;
+  image->height = yres;
+  image->channels = nchannels;
+
+  // Allocate and copy the converted data
+  image->data = new float[xres * yres * nchannels];
+  if (!dst.get_pixels(ROI::All(), TypeDesc::FLOAT, image->data)) {
+    *error_msg = strdup(dst.geterror().c_str());
+    delete[] image->data;
+    delete image;
+    return nullptr;
+  }
+
   return image;
 }
 

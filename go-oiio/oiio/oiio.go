@@ -55,6 +55,46 @@ func ReadImage32(filename string) (*floatimage.Float32NRGBA, error) {
 	return floatimage.NewFloat32NRGBA(image.Rect(0, 0, width, height), data), nil
 }
 
+// ReadImage32Aces reads an image and converts it to ACEScg (AP1) color space using OpenColorIO.
+// This function uses OIIO's built-in OCIO integration to:
+// 1. Interpret the source image as "Utility - sRGB - Texture" (linearizes and applies correct primaries)
+// 2. Convert to ACEScg working color space
+// Note: Requires an OCIO configuration to be available (via OCIO env var or OIIO defaults)
+func ReadImage32Aces(filename string) (*floatimage.Float32NRGBA, error) {
+	cFilename := C.CString(filename)
+	defer C.free(unsafe.Pointer(cFilename))
+
+	var errorMsg *C.char
+	cImage := C.read_image_aces(cFilename, &errorMsg)
+	if cImage == nil {
+		if errorMsg != nil {
+			err := C.GoString(errorMsg)
+			C.free(unsafe.Pointer(errorMsg))
+			return nil, fmt.Errorf("failed to read image for ACEScg: %s", err)
+		}
+		return nil, fmt.Errorf("failed to read image for ACEScg")
+	}
+	defer C.free_image(cImage)
+
+	width := int(cImage.width)
+	height := int(cImage.height)
+	numChannels := int(cImage.channels)
+	cData := (*[1 << 30]C.float)(unsafe.Pointer(cImage.data))[: width*height*numChannels : width*height*numChannels]
+
+	var data []float32
+
+	switch cImage.channels {
+	case 3:
+		data = toRGB32Slice(cData, width, height)
+	case 4:
+		data = toRGBA32Slice(cData, width, height, numChannels)
+	default:
+		return nil, fmt.Errorf("unsupported number of channels: %d", cImage.channels)
+	}
+
+	return floatimage.NewFloat32NRGBA(image.Rect(0, 0, width, height), data), nil
+}
+
 func ReadImage64(filename string) (*floatimage.Float64NRGBA, error) {
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))

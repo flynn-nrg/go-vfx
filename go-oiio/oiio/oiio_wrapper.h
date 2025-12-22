@@ -13,6 +13,7 @@ typedef struct Image {
 } Image;
 
 Image *read_image(const char *filename, char **error_msg);
+Image *read_image_aces(const char *filename, char **error_msg);
 void free_image(Image *image);
 
 // Returns 0 on success, non-zero error code on failure
