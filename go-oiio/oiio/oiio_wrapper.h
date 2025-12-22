@@ -12,12 +12,41 @@ typedef struct Image {
   float *data;
 } Image;
 
+typedef struct ACESMetadata {
+  // Display window (full canvas)
+  int display_x;
+  int display_y;
+  int display_width;
+  int display_height;
+
+  // Data window (actual pixel data region)
+  int data_x;
+  int data_y;
+  int data_width;
+  int data_height;
+
+  // Pixel aspect ratio (1.0 for square pixels, 2.0 for 2x anamorphic, etc.)
+  float pixel_aspect_ratio;
+
+  // Optional timecode (can be NULL or empty string)
+  const char *timecode;
+
+  // ACES version string (e.g., "ACES 1.3")
+  const char *aces_version;
+} ACESMetadata;
+
 Image *read_image(const char *filename, char **error_msg);
+Image *read_image_aces(const char *filename, char **error_msg);
 void free_image(Image *image);
 
 // Returns 0 on success, non-zero error code on failure
 // hdr: 1 for HDR, 0 for LDR
 int write_image(const char *filename, Image *image, char **error_msg, int hdr);
+
+// Write image in ACEScg color space with metadata (EXR format)
+// Returns 0 on success, non-zero error code on failure
+int write_image_aces(const char *filename, Image *image, ACESMetadata *metadata,
+                     char **error_msg);
 
 #ifdef __cplusplus
 }

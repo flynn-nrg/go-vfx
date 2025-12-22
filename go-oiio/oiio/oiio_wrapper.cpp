@@ -1,4 +1,6 @@
 #include "oiio_wrapper.h"
+#include <OpenImageIO/imagebuf.h>
+#include <OpenImageIO/imagebufalgo.h>
 #include <OpenImageIO/imageio.h>
 
 using namespace OIIO;
@@ -32,6 +34,50 @@ Image *read_image(const char *filename, char **error_msg) {
   }
 
   inp->close();
+  return image;
+}
+
+// Read image and convert to ACEScg (AP1) color space using OCIO
+Image *read_image_aces(const char *filename, char **error_msg) {
+  Image *image = new Image();
+
+  // Read image into an ImageBuf
+  ImageBuf src(filename);
+  if (src.has_error()) {
+    *error_msg = strdup(src.geterror().c_str());
+    delete image;
+    return nullptr;
+  }
+
+  const ImageSpec &spec = src.spec();
+  int xres = spec.width;
+  int yres = spec.height;
+  int nchannels = spec.nchannels;
+
+  // Perform color conversion from sRGB to ACEScg using OCIO
+  // "Utility - sRGB - Texture" is the typical name for sRGB texture space in
+  // ACES configs
+  ImageBuf dst;
+  if (!ImageBufAlgo::colorconvert(dst, src, "Utility - sRGB - Texture",
+                                  "ACEScg")) {
+    *error_msg = strdup(dst.geterror().c_str());
+    delete image;
+    return nullptr;
+  }
+
+  image->width = xres;
+  image->height = yres;
+  image->channels = nchannels;
+
+  // Allocate and copy the converted data
+  image->data = new float[xres * yres * nchannels];
+  if (!dst.get_pixels(ROI::All(), TypeDesc::FLOAT, image->data)) {
+    *error_msg = strdup(dst.geterror().c_str());
+    delete[] image->data;
+    delete image;
+    return nullptr;
+  }
+
   return image;
 }
 
@@ -79,6 +125,78 @@ int write_image(const char *filename, Image *image, char **error_msg, int hdr) {
       out->close();
       return 1;
     }
+  }
+
+  out->close();
+  return 0;
+}
+
+// Write image in ACEScg color space with metadata
+int write_image_aces(const char *filename, Image *image, ACESMetadata *metadata,
+                     char **error_msg) {
+  std::unique_ptr<ImageOutput> out = ImageOutput::create(filename);
+  if (!out) {
+    *error_msg = strdup("Could not create ImageOutput for ACES");
+    return 1;
+  }
+
+  ImageSpec spec;
+  spec.width = image->width;
+  spec.height = image->height;
+  spec.nchannels = image->channels;
+  spec.format = TypeDesc::FLOAT; // Always use float for ACES/EXR
+  spec.channelnames = {"R", "G", "B", "A"};
+
+  // Set color space to ACEScg
+  spec.attribute("oiio:ColorSpace", "ACEScg");
+
+  // Set ACEScg (AP1) chromaticities
+  float chromaticities[8] = {
+      0.713f,   0.300f,  // Red primary
+      0.165f,   0.830f,  // Green primary
+      0.128f,   0.044f,  // Blue primary
+      0.32168f, 0.33767f // White point (D60)
+  };
+  spec.attribute("chromaticities", TypeDesc(TypeDesc::FLOAT, 8),
+                 chromaticities);
+
+  // Set display window (full canvas) and pixel aspect ratio
+  spec.attribute("PixelAspectRatio", metadata->pixel_aspect_ratio);
+  spec.full_x = metadata->display_x;
+  spec.full_y = metadata->display_y;
+  spec.full_width = metadata->display_width;
+  spec.full_height = metadata->display_height;
+
+  // Set data window (actual pixel data region)
+  spec.x = metadata->data_x;
+  spec.y = metadata->data_y;
+  spec.width = metadata->data_width;
+  spec.height = metadata->data_height;
+
+  // Set timecode if provided
+  if (metadata->timecode && strlen(metadata->timecode) > 0) {
+    spec.attribute("smpte:TimeCode", metadata->timecode);
+  }
+
+  // Set ACES version as custom attribute
+  if (metadata->aces_version && strlen(metadata->aces_version) > 0) {
+    spec.attribute("aces:version", metadata->aces_version);
+  }
+
+  // Add standard ACES metadata
+  spec.attribute("compression", "zip"); // Standard compression for ACES EXR
+  spec.attribute("openexr:lineOrder", "increasing");
+
+  if (!out->open(filename, spec)) {
+    *error_msg = strdup(out->geterror().c_str());
+    return 1;
+  }
+
+  // Write float data directly (no conversion needed for EXR)
+  if (!out->write_image(TypeDesc::FLOAT, image->data)) {
+    *error_msg = strdup(out->geterror().c_str());
+    out->close();
+    return 1;
   }
 
   out->close();
