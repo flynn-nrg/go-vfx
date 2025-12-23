@@ -20,12 +20,20 @@ import (
 	"github.com/flynn-nrg/floatimage/floatimage"
 )
 
+type ReadImageOptions C.ReadImageOptions
+
+const (
+	Raw             ReadImageOptions = C.RAW
+	LineariseSRGB   ReadImageOptions = C.LINEARISE_SRGB
+	ConvertToACEScg ReadImageOptions = C.CONVERT_TO_ACESCG
+)
+
 func ReadImage32(filename string) (*floatimage.Float32NRGBA, error) {
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
 
 	var errorMsg *C.char
-	cImage := C.read_image(cFilename, &errorMsg)
+	cImage := C.read_image(cFilename, &errorMsg, C.RAW)
 	if cImage == nil {
 		if errorMsg != nil {
 			err := C.GoString(errorMsg)
@@ -55,24 +63,20 @@ func ReadImage32(filename string) (*floatimage.Float32NRGBA, error) {
 	return floatimage.NewFloat32NRGBA(image.Rect(0, 0, width, height), data), nil
 }
 
-// ReadImageACES reads an image and converts it to ACEScg (AP1) color space using OpenColorIO.
-// This function uses OIIO's built-in OCIO integration to:
-// 1. Interpret the source image as "Utility - sRGB - Texture" (linearizes and applies correct primaries)
-// 2. Convert to ACEScg working color space
-// Note: Requires an OCIO configuration to be available (via OCIO env var or OIIO defaults)
-func ReadImageACES(filename string) (*floatimage.Float32NRGBA, error) {
+// ReadImage reads an image and converts it to the specified color space using OpenColorIO.
+func ReadImage(filename string, options ReadImageOptions) (*floatimage.Float32NRGBA, error) {
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
 
 	var errorMsg *C.char
-	cImage := C.read_image_aces(cFilename, &errorMsg)
+	cImage := C.read_image(cFilename, &errorMsg, C.ReadImageOptions(options))
 	if cImage == nil {
 		if errorMsg != nil {
 			err := C.GoString(errorMsg)
 			C.free(unsafe.Pointer(errorMsg))
-			return nil, fmt.Errorf("failed to read image for ACEScg: %s", err)
+			return nil, fmt.Errorf("failed to read image: %s", err)
 		}
-		return nil, fmt.Errorf("failed to read image for ACEScg")
+		return nil, fmt.Errorf("failed to read image")
 	}
 	defer C.free_image(cImage)
 
@@ -100,7 +104,7 @@ func ReadImage64(filename string) (*floatimage.Float64NRGBA, error) {
 	defer C.free(unsafe.Pointer(cFilename))
 
 	var errorMsg *C.char
-	cImage := C.read_image(cFilename, &errorMsg)
+	cImage := C.read_image(cFilename, &errorMsg, C.RAW)
 	if cImage == nil {
 		if errorMsg != nil {
 			err := C.GoString(errorMsg)

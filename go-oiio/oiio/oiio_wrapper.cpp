@@ -5,7 +5,7 @@
 
 using namespace OIIO;
 
-Image *read_image(const char *filename, char **error_msg) {
+Image *read_image_raw(const char *filename, char **error_msg) {
   Image *image = new Image();
 
   auto inp = ImageInput::open(filename);
@@ -37,8 +37,8 @@ Image *read_image(const char *filename, char **error_msg) {
   return image;
 }
 
-// Read image and convert to ACEScg (AP1) color space using OCIO
-Image *read_image_aces(const char *filename, char **error_msg) {
+Image *read_image_with_conversion(const char *filename, char **error_msg,
+                                  const char *destination_color_space) {
   Image *image = new Image();
 
   // Read image into an ImageBuf
@@ -54,12 +54,12 @@ Image *read_image_aces(const char *filename, char **error_msg) {
   int yres = spec.height;
   int nchannels = spec.nchannels;
 
-  // Perform color conversion from sRGB to ACEScg using OCIO
-  // "Utility - sRGB - Texture" is the typical name for sRGB texture space in
-  // ACES configs
+  // Perform color conversion from sRGB to destination_color_space using OCIO
+  // Using "sRGB Encoded Rec.709 (sRGB)" which is standard in OCIO 2.x built-in
+  // configs
   ImageBuf dst;
-  if (!ImageBufAlgo::colorconvert(dst, src, "Utility - sRGB - Texture",
-                                  "ACEScg")) {
+  if (!ImageBufAlgo::colorconvert(dst, src, "sRGB Encoded Rec.709 (sRGB)",
+                                  destination_color_space)) {
     *error_msg = strdup(dst.geterror().c_str());
     delete image;
     return nullptr;
@@ -79,6 +79,22 @@ Image *read_image_aces(const char *filename, char **error_msg) {
   }
 
   return image;
+}
+
+Image *read_image(const char *filename, char **error_msg,
+                  ReadImageOptions options) {
+  switch (options) {
+  case LINEARISE_SRGB:
+    return read_image_with_conversion(filename, error_msg,
+                                      "Linear Rec.709 (sRGB)");
+  case CONVERT_TO_ACESCG:
+    return read_image_with_conversion(filename, error_msg, "ACEScg");
+  case RAW:
+    return read_image_raw(filename, error_msg);
+  default:
+    *error_msg = strdup("Invalid read image options");
+    return nullptr;
+  }
 }
 
 void free_image(Image *image) {
