@@ -49,11 +49,17 @@ func main() {
 }
 ```
 
-### ACEScg Color Space Workflow
+### Color Space Conversions with OpenColorIO
 
-The package includes full support for ACEScg (AP1) color space workflow, which is the industry standard for VFX and animation pipelines:
+The package supports automatic color space conversions using OpenColorIO (OCIO) integration:
 
-#### Reading Images in ACEScg
+#### Available Conversion Options
+
+- **`oiio.Raw`** - Read image data as-is without any conversion
+- **`oiio.LineariseSRGB`** - Convert sRGB to linear Rec.709 (removes gamma, keeps primaries)
+- **`oiio.ConvertToACEScg`** - Convert sRGB to ACEScg (AP1) color space (linearises and converts primaries)
+
+#### Reading Images with Color Space Conversion
 
 ```golang
 package main
@@ -66,11 +72,23 @@ import (
 )
 
 func main() {
-	// Read image and convert to ACEScg (AP1) color space
+	// Option 1: Read raw image data without conversion
+	imgRaw, err := oiio.ReadImage32("texture.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	// Option 2: Read and linearize sRGB to linear Rec.709
+	imgLinear, err := oiio.ReadImage("texture.png", oiio.LineariseSRGB)
+	if err != nil {
+		log.Fatal(err)
+	}
+	
+	// Option 3: Read and convert to ACEScg (AP1) color space
 	// This automatically:
 	// 1. Linearizes sRGB-encoded data (applies inverse gamma)
 	// 2. Converts from Rec. 709 primaries to ACEScg (AP1) primaries
-	imgAces, err := oiio.ReadImage32Aces("texture.png")
+	imgAces, err := oiio.ReadImage("texture.png", oiio.ConvertToACEScg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -82,7 +100,7 @@ func main() {
 }
 ```
 
-#### Writing Images in ACEScg with Metadata
+### Complete ACEScg Workflow Example
 
 ```golang
 package main
@@ -95,16 +113,16 @@ import (
 )
 
 func main() {
-	// Read image in ACEScg color space
-	imgAces, err := oiio.ReadImage32Aces("input.png")
+	// Read image and convert to ACEScg color space
+	imgAces, err := oiio.ReadImage("input.png", oiio.ConvertToACEScg)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Process the image...
+	// Process the image in ACEScg color space
 	// (your rendering/compositing code here)
 
-	// Prepare ACES metadata
+	// Prepare ACES metadata for output
 	bounds := imgAces.Bounds()
 	metadata := &oiio.ACESMetadata{
 		DisplayWindow:    image.Rect(0, 0, 1920, 1080), // Full canvas
@@ -120,6 +138,22 @@ func main() {
 	}
 }
 ```
+
+### ACEScg Output Features
+
+When using `WriteImageACES`, the following metadata is embedded in the EXR file:
+
+- **Color Space**: `oiio:ColorSpace` attribute set to "ACEScg"
+- **Chromaticities**: ACEScg (AP1) color primaries and D60 white point:
+  - Red primary: (0.713, 0.300)
+  - Green primary: (0.165, 0.830)
+  - Blue primary: (0.128, 0.044)
+  - White point: (0.32168, 0.33767) - D60
+- **Display/Data Windows**: Support for overscan, tiling, and cropping
+- **Pixel Aspect Ratio**: Configurable (1.0 for square pixels, 2.0 for 2x anamorphic, etc.)
+- **Timecode**: Optional SMPTE timecode for frame identification
+- **ACES Version**: Custom attribute specifying ACES version
+- **Compression**: ZIP compression (lossless, industry standard)
 
 ## Limitations
 

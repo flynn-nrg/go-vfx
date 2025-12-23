@@ -35,8 +35,14 @@ typedef struct ACESMetadata {
   const char *aces_version;
 } ACESMetadata;
 
-Image *read_image(const char *filename, char **error_msg);
-Image *read_image_aces(const char *filename, char **error_msg);
+typedef enum {
+  RAW = 0,
+  LINEARISE_SRGB = 1,
+  CONVERT_TO_ACESCG = 2,
+} ReadImageOptions;
+
+Image *read_image(const char *filename, char **error_msg,
+                  ReadImageOptions options);
 void free_image(Image *image);
 
 // Returns 0 on success, non-zero error code on failure
