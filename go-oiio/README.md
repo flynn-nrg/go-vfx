@@ -51,7 +51,11 @@ func main() {
 
 ### Color Space Conversions with OpenColorIO
 
-The package supports automatic color space conversions using OpenColorIO (OCIO) integration:
+The package supports automatic color space conversions using OpenColorIO (OCIO) integration.
+
+**Requirements:**
+- OpenColorIO 2.x installed
+- Either use the built-in config (`export OCIO=ocio://default`) or set `OCIO` to your config file path
 
 #### Available Conversion Options
 

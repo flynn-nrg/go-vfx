@@ -55,8 +55,10 @@ Image *read_image_with_conversion(const char *filename, char **error_msg,
   int nchannels = spec.nchannels;
 
   // Perform color conversion from sRGB to destination_color_space using OCIO
+  // Using "sRGB Encoded Rec.709 (sRGB)" which is standard in OCIO 2.x built-in
+  // configs
   ImageBuf dst;
-  if (!ImageBufAlgo::colorconvert(dst, src, "sRGB - Texture",
+  if (!ImageBufAlgo::colorconvert(dst, src, "sRGB Encoded Rec.709 (sRGB)",
                                   destination_color_space)) {
     *error_msg = strdup(dst.geterror().c_str());
     delete image;
