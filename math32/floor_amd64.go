@@ -21,16 +21,22 @@ func ceil(x float32) float32 {
 func round(x float32) float32 {
 	v := archsimd.BroadcastFloat32x4(x)
 	half := archsimd.BroadcastFloat32x4(0.5)
-	signMask := archsimd.BroadcastFloat32x4(-0.0).AsInt32x4()
 
-	// Get absolute value: clear sign bit using ~signMask & v
-	abs := signMask.AndNot(v.AsInt32x4()).AsFloat32x4()
+	// 0x7FFFFFFF clears the sign bit (for absolute value)
+	absMask := archsimd.BroadcastInt32x4(0x7FFFFFFF)
+	// 0x80000000 isolates the sign bit (math.MinInt32 = -2147483648)
+	signMask := archsimd.BroadcastInt32x4(-0x80000000)
 
-	// Add 0.5 and truncate
+	// Get absolute value: v & 0x7FFFFFFF
+	abs := v.AsInt32x4().And(absMask).AsFloat32x4()
+
+	// Add 0.5 and truncate toward zero
 	result := abs.Add(half).Trunc()
 
-	// Restore original sign: copy sign bit from x to result
+	// Extract sign bit from original: v & 0x80000000
 	signBit := v.AsInt32x4().And(signMask)
+
+	// Apply sign to result: result | signBit
 	result = result.AsInt32x4().Or(signBit).AsFloat32x4()
 
 	return result.GetElem(0)
