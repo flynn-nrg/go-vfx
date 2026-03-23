@@ -15,103 +15,70 @@ type Vec3Impl struct {
 
 // Length returns the length of this vector.
 func (v Vec3Impl) Length() float32 {
-	return math32.Sqrt((v.X * v.X) + (v.Y * v.Y) + (v.Z * v.Z))
+	return lengthSIMD(v)
 }
 
 // SquaredLength returns the squared length of this vector.
 func (v Vec3Impl) SquaredLength() float32 {
-	return (v.X * v.X) + (v.Y * v.Y) + (v.Z * v.Z)
+	return squaredLengthSIMD(v)
 }
 
 // MakeUnitVector transform the vector into its unit representation.
 func (v Vec3Impl) MakeUnitVector() Vec3Impl {
-	l := v.Length()
-	v.X = v.X / l
-	v.Y = v.Y / l
-	v.Z = v.Z / l
-
-	return v
+	return unitVectorSIMD(v)
 }
 
 // Add returns the sum of two or more vectors.
 func Add(v1 Vec3Impl, args ...Vec3Impl) Vec3Impl {
 	sum := v1
-
 	for i := range args {
-		sum.X += args[i].X
-		sum.Y += args[i].Y
-		sum.Z += args[i].Z
+		sum = addTwo(sum, args[i])
 	}
-
 	return sum
 }
 
 // Sub returns the subtraction of two or more vectors.
 func Sub(v1 Vec3Impl, args ...Vec3Impl) Vec3Impl {
 	res := v1
-
 	for i := range args {
-		res.X -= args[i].X
-		res.Y -= args[i].Y
-		res.Z -= args[i].Z
+		res = subTwo(res, args[i])
 	}
-
 	return res
 }
 
 // Mul returns the multiplication of two vectors.
 func Mul(v1 Vec3Impl, v2 Vec3Impl) Vec3Impl {
-	return Vec3Impl{
-		X: v1.X * v2.X,
-		Y: v1.Y * v2.Y,
-		Z: v1.Z * v2.Z,
-	}
+	return mulTwo(v1, v2)
 }
 
 // Div returns the division of two vectors.
 func Div(v1 Vec3Impl, v2 Vec3Impl) Vec3Impl {
-	return Vec3Impl{
-		X: v1.X / v2.X,
-		Y: v1.Y / v2.Y,
-		Z: v1.Z / v2.Z,
-	}
+	return divTwo(v1, v2)
 }
 
 // ScalarMul returns the scalar multiplication of the given vector and scalar values.
 func ScalarMul(v1 Vec3Impl, t float32) Vec3Impl {
-	return Vec3Impl{
-		X: v1.X * t,
-		Y: v1.Y * t,
-		Z: v1.Z * t,
-	}
+	return scalarMulSIMD(v1, t)
 }
 
-// ScalarMul returns the scalar division of the given vector and scalar values.
+// ScalarDiv returns the scalar division of the given vector and scalar values.
 func ScalarDiv(v1 Vec3Impl, t float32) Vec3Impl {
-	return Vec3Impl{
-		X: v1.X / t,
-		Y: v1.Y / t,
-		Z: v1.Z / t,
-	}
+	return scalarDivSIMD(v1, t)
 }
 
 // Dot computes the dot product of the two supplied vectors.
 func Dot(v1 Vec3Impl, v2 Vec3Impl) float32 {
-	return (v1.X * v2.X) + (v1.Y * v2.Y) + (v1.Z * v2.Z)
+	return dotSIMD(v1, v2)
 }
 
 // Cross computes the cross product of the two supplied vectors.
 func Cross(v1 Vec3Impl, v2 Vec3Impl) Vec3Impl {
-	return Vec3Impl{
-		X: (v1.Y * v2.Z) - (v1.Z * v2.Y),
-		Y: -((v1.X * v2.Z) - (v1.Z * v2.X)),
-		Z: (v1.X * v2.Y) - (v1.Y * v2.X),
-	}
+	return crossSIMD(v1, v2)
 }
 
 // UnitVector returns a unit vector representation of the supplied vector.
 func UnitVector(v Vec3Impl) Vec3Impl {
-	return ScalarDiv(v, v.Length())
+	return unitVectorSIMD(v)
 }
 
 // RandomCosineDirection returns a vector with a random cosine direction.
@@ -248,11 +215,7 @@ func Max3(v0 Vec3Impl, v1 Vec3Impl, v2 Vec3Impl) Vec3Impl {
 
 // Lerp performs a linear interpolation between the two provided vectors.
 func Lerp(v0, v1 Vec3Impl, t float32) Vec3Impl {
-	return Vec3Impl{
-		X: (1-t)*v0.X + t*v1.X,
-		Y: (1-t)*v0.Y + t*v1.Y,
-		Z: (1-t)*v0.Z + t*v1.Z,
-	}
+	return lerpSIMD(v0, v1, t)
 }
 
 // Equals returns whether two vectors are the same.

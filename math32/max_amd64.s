@@ -1,4 +1,4 @@
-//go:build amd64 && !goexperiment.simd
+//go:build amd64
 
 #include "textflag.h"
 
