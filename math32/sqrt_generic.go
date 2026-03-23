@@ -1,13 +1,11 @@
-//go:build !amd64 && !arm64
+//go:build !(amd64 && goexperiment.simd)
 
 package math32
 
 import "math"
 
-// sqrt provides a software fallback for architectures without assembly implementation.
-// On ARM64 and AMD64, this is replaced by optimized assembly versions.
+// sqrt provides a software fallback using float64 conversion.
+// On AMD64 with GOEXPERIMENT=simd, this is replaced by archsimd intrinsics.
 func sqrt(x float32) float32 {
-	// Use float64 sqrt and convert back
-	// This is slower but ensures correctness on all platforms
 	return float32(math.Sqrt(float64(x)))
 }
