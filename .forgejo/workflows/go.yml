@@ -1,0 +1,45 @@
+name: Go Modules CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: freebsd-native
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Guide the linker to look in FreeBSD's port standard location
+      - name: Set FreeBSD Cgo Flags
+        run: |
+          echo "CGO_CFLAGS=-I/usr/local/include" >> $GITHUB_ENV
+          echo "CGO_LDFLAGS=-L/usr/local/lib" >> $GITHUB_ENV
+
+      - name: Get a list of modules
+        id: modules
+        run: |
+          # Find all directories that contain a go.mod file
+          # The '|| true' allows the command to not fail if no modules are found
+          find . -name "go.mod" -printf '%h\n' > modules.txt || true
+          # Create a JSON array of the module paths for the matrix strategy
+          jq -R -s -c 'split("\n") | map(select(. != ""))' modules.txt > modules.json
+
+      - name: Run build and tests for each module
+        run: |
+          # Use a for loop to iterate over each module directory
+          while IFS= read -r module_dir; do
+            if [ -n "$module_dir" ]; then
+              echo "--- Building and testing in module: $module_dir ---"
+              cd "$module_dir"
+              go mod tidy
+              go build -v ./...
+              go test -v ./...
+              cd - # Go back to the root directory
+            fi
+          done < modules.txt
+        # We skip this step if no modules were found
+        if: success()
