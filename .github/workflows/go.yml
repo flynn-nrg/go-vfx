@@ -8,6 +8,9 @@ on:
 
 jobs:
   build:
+    # Only run this job when executing on GitHub's infrastructure
+    if: github.server_url == 'https://github.com'
+
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -15,7 +18,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.25'
+        go-version: '1.26'
 
     - name: Install OpenImageIO Dependencies
       run: |
