@@ -6,6 +6,17 @@ extern "C" {
 
 typedef struct TextureSystemHandle TextureSystemHandle;
 
+// Opaque handle to a resolved texture file (OIIO::TextureSystem::TextureHandle).
+// Owned by the TextureSystem: valid for its lifetime, never freed by the
+// caller.
+typedef struct TextureHandle TextureHandle;
+
+// Opaque per-thread scratch state (OIIO::TextureSystem::Perthread). Must be
+// created with texturesystem_create_thread_info and released with
+// texturesystem_destroy_thread_info; never share one across concurrently
+// running goroutines/threads.
+typedef struct PerThreadInfo PerThreadInfo;
+
 typedef enum {
   WRAP_DEFAULT = 0,
   WRAP_BLACK,
@@ -97,6 +108,62 @@ int texturesystem_getattribute_float(TextureSystemHandle *ts, const char *name,
 int texturesystem_getattribute_string(TextureSystemHandle *ts,
                                       const char *name, char **out,
                                       char **error_msg);
+
+// --- TextureHandle fast path ---
+//
+// Resolving a filename to a TextureHandle once and reusing it (with a
+// per-thread PerThreadInfo) skips the per-call filename hash/lookup that the
+// filename-based functions above repeat every time. Intended for a renderer's
+// inner shading loop, where the same texture is looked up many times.
+
+// Creates a Perthread. Must be released with texturesystem_destroy_thread_info.
+// Returns NULL if ts is invalid.
+PerThreadInfo *texturesystem_create_thread_info(TextureSystemHandle *ts);
+void texturesystem_destroy_thread_info(TextureSystemHandle *ts,
+                                       PerThreadInfo *info);
+
+// Resolves filename to a TextureHandle. thread_info may be NULL. Resolution
+// is lazy. This rarely fails.
+// The returned handle is owned by ts; do not free it.
+TextureHandle *texturesystem_get_texture_handle(TextureSystemHandle *ts,
+                                                const char *filename,
+                                                PerThreadInfo *thread_info,
+                                                char **error_msg);
+
+// Handle-based equivalents of texturesystem_texture/texture3d/environment/
+// get_texture_info_{int,float}. thread_info may be NULL (at a throughput
+// cost: OIIO falls back to its own thread-local lookup). Same
+// success/failure/ownership conventions as their filename-based counterparts.
+int texturesystem_texture_handle(TextureSystemHandle *ts, TextureHandle *th,
+                                 PerThreadInfo *thread_info,
+                                 const TextureLookupOptions *opts, float s,
+                                 float t, float dsdx, float dtdx, float dsdy,
+                                 float dtdy, int nchannels, float *result,
+                                 char **error_msg);
+int texturesystem_texture3d_handle(TextureSystemHandle *ts, TextureHandle *th,
+                                   PerThreadInfo *thread_info,
+                                   const TextureLookupOptions *opts,
+                                   const float *p, const float *dpdx,
+                                   const float *dpdy, const float *dpdz,
+                                   int nchannels, float *result,
+                                   char **error_msg);
+int texturesystem_environment_handle(TextureSystemHandle *ts,
+                                     TextureHandle *th,
+                                     PerThreadInfo *thread_info,
+                                     const TextureLookupOptions *opts,
+                                     const float *r, const float *drdx,
+                                     const float *drdy, int nchannels,
+                                     float *result, char **error_msg);
+int texturesystem_get_texture_info_handle_int(TextureSystemHandle *ts,
+                                              TextureHandle *th,
+                                              PerThreadInfo *thread_info,
+                                              const char *dataname, int *out,
+                                              char **error_msg);
+int texturesystem_get_texture_info_handle_float(TextureSystemHandle *ts,
+                                                TextureHandle *th,
+                                                PerThreadInfo *thread_info,
+                                                const char *dataname,
+                                                float *out, char **error_msg);
 
 #ifdef __cplusplus
 }

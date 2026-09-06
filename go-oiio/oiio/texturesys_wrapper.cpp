@@ -278,3 +278,165 @@ int texturesystem_getattribute_string(TextureSystemHandle *handle,
   *out = strdup(value.c_str());
   return 0;
 }
+
+namespace {
+inline TextureSystem::Perthread *to_oiio_perthread(PerThreadInfo *info) {
+  return reinterpret_cast<TextureSystem::Perthread *>(info);
+}
+inline TextureSystem::TextureHandle *to_oiio_texhandle(TextureHandle *th) {
+  return reinterpret_cast<TextureSystem::TextureHandle *>(th);
+}
+} // namespace
+
+PerThreadInfo *texturesystem_create_thread_info(TextureSystemHandle *handle) {
+  if (!handle || !handle->ts)
+    return nullptr;
+  return reinterpret_cast<PerThreadInfo *>(handle->ts->create_thread_info());
+}
+
+void texturesystem_destroy_thread_info(TextureSystemHandle *handle,
+                                       PerThreadInfo *info) {
+  if (!handle || !handle->ts || !info)
+    return;
+  handle->ts->destroy_thread_info(to_oiio_perthread(info));
+}
+
+TextureHandle *texturesystem_get_texture_handle(TextureSystemHandle *handle,
+                                                const char *filename,
+                                                PerThreadInfo *thread_info,
+                                                char **error_msg) {
+  if (!handle || !handle->ts) {
+    if (error_msg)
+      *error_msg = strdup("Invalid TextureSystem handle");
+    return nullptr;
+  }
+  auto *th = handle->ts->get_texture_handle(ustring(filename),
+                                            to_oiio_perthread(thread_info));
+  if (!th || !handle->ts->good(th)) {
+    if (error_msg)
+      *error_msg = strdup_error_or(handle->ts->geterror(),
+                                   "could not resolve texture handle");
+    return nullptr;
+  }
+  return reinterpret_cast<TextureHandle *>(th);
+}
+
+int texturesystem_texture_handle(TextureSystemHandle *handle,
+                                 TextureHandle *th, PerThreadInfo *thread_info,
+                                 const TextureLookupOptions *opts, float s,
+                                 float t, float dsdx, float dtdx, float dsdy,
+                                 float dtdy, int nchannels, float *result,
+                                 char **error_msg) {
+  if (!handle || !handle->ts || !th) {
+    if (error_msg)
+      *error_msg = strdup("Invalid TextureSystem/TextureHandle");
+    return 1;
+  }
+  TextureOpt opt = to_oiio_opt(opts);
+  bool ok = handle->ts->texture(to_oiio_texhandle(th),
+                                to_oiio_perthread(thread_info), opt, s, t,
+                                dsdx, dtdx, dsdy, dtdy, nchannels, result);
+  if (!ok) {
+    if (error_msg)
+      *error_msg = strdup(handle->ts->geterror().c_str());
+    return 1;
+  }
+  return 0;
+}
+
+int texturesystem_texture3d_handle(TextureSystemHandle *handle,
+                                   TextureHandle *th,
+                                   PerThreadInfo *thread_info,
+                                   const TextureLookupOptions *opts,
+                                   const float *p, const float *dpdx,
+                                   const float *dpdy, const float *dpdz,
+                                   int nchannels, float *result,
+                                   char **error_msg) {
+  if (!handle || !handle->ts || !th) {
+    if (error_msg)
+      *error_msg = strdup("Invalid TextureSystem/TextureHandle");
+    return 1;
+  }
+  TextureOpt opt = to_oiio_opt(opts);
+  bool ok = handle->ts->texture3d(
+      to_oiio_texhandle(th), to_oiio_perthread(thread_info), opt,
+      V3fParam(p[0], p[1], p[2]), V3fParam(dpdx[0], dpdx[1], dpdx[2]),
+      V3fParam(dpdy[0], dpdy[1], dpdy[2]), V3fParam(dpdz[0], dpdz[1], dpdz[2]),
+      nchannels, result);
+  if (!ok) {
+    if (error_msg)
+      *error_msg = strdup(handle->ts->geterror().c_str());
+    return 1;
+  }
+  return 0;
+}
+
+int texturesystem_environment_handle(TextureSystemHandle *handle,
+                                     TextureHandle *th,
+                                     PerThreadInfo *thread_info,
+                                     const TextureLookupOptions *opts,
+                                     const float *r, const float *drdx,
+                                     const float *drdy, int nchannels,
+                                     float *result, char **error_msg) {
+  if (!handle || !handle->ts || !th) {
+    if (error_msg)
+      *error_msg = strdup("Invalid TextureSystem/TextureHandle");
+    return 1;
+  }
+  TextureOpt opt = to_oiio_opt(opts);
+  bool ok = handle->ts->environment(
+      to_oiio_texhandle(th), to_oiio_perthread(thread_info), opt,
+      V3fParam(r[0], r[1], r[2]), V3fParam(drdx[0], drdx[1], drdx[2]),
+      V3fParam(drdy[0], drdy[1], drdy[2]), nchannels, result);
+  if (!ok) {
+    if (error_msg)
+      *error_msg = strdup(handle->ts->geterror().c_str());
+    return 1;
+  }
+  return 0;
+}
+
+int texturesystem_get_texture_info_handle_int(TextureSystemHandle *handle,
+                                              TextureHandle *th,
+                                              PerThreadInfo *thread_info,
+                                              const char *dataname, int *out,
+                                              char **error_msg) {
+  if (!handle || !handle->ts || !th) {
+    if (error_msg)
+      *error_msg = strdup("Invalid TextureSystem/TextureHandle");
+    return 1;
+  }
+  bool ok = handle->ts->get_texture_info(to_oiio_texhandle(th),
+                                         to_oiio_perthread(thread_info), 0,
+                                         ustring(dataname), TypeDesc::INT,
+                                         out);
+  if (!ok) {
+    if (error_msg)
+      *error_msg = strdup(handle->ts->geterror().c_str());
+    return 1;
+  }
+  return 0;
+}
+
+int texturesystem_get_texture_info_handle_float(TextureSystemHandle *handle,
+                                                TextureHandle *th,
+                                                PerThreadInfo *thread_info,
+                                                const char *dataname,
+                                                float *out,
+                                                char **error_msg) {
+  if (!handle || !handle->ts || !th) {
+    if (error_msg)
+      *error_msg = strdup("Invalid TextureSystem/TextureHandle");
+    return 1;
+  }
+  bool ok = handle->ts->get_texture_info(to_oiio_texhandle(th),
+                                         to_oiio_perthread(thread_info), 0,
+                                         ustring(dataname), TypeDesc::FLOAT,
+                                         out);
+  if (!ok) {
+    if (error_msg)
+      *error_msg = strdup(handle->ts->geterror().c_str());
+    return 1;
+  }
+  return 0;
+}

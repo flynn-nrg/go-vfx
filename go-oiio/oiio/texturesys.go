@@ -334,3 +334,185 @@ func attributeError(op, name string, errorMsg *C.char) error {
 	}
 	return fmt.Errorf("failed to %s attribute %q", op, name)
 }
+
+// PerThreadInfo holds OIIO thread-local scratch state that speeds up
+// repeated texture lookups by avoiding lock contention in the tile cache.
+//
+// Go's goroutines are not OS threads and can migrate between them, so
+// relying on OIIO's own thread-local Perthread (as passing thread_info=nil
+// throughout would do) is not meaningful here. Instead, create one
+// PerThreadInfo per long-lived rendering worker (e.g. one per worker
+// goroutine that owns a fixed slice of work for its lifetime), reuse it for
+// every lookup that worker makes, and Close it when the worker exits. Never
+// share a PerThreadInfo between concurrently running goroutines.
+type PerThreadInfo struct {
+	ts  *TextureSystem
+	ptr *C.PerThreadInfo
+}
+
+// NewPerThreadInfo creates per-thread scratch state for repeated texture
+// lookups. See PerThreadInfo for the concurrency contract.
+func (ts *TextureSystem) NewPerThreadInfo() *PerThreadInfo {
+	ptr := C.texturesystem_create_thread_info(ts.ptr)
+	info := &PerThreadInfo{ts: ts, ptr: ptr}
+	runtime.SetFinalizer(info, (*PerThreadInfo).Close)
+	return info
+}
+
+// Close releases the per-thread scratch state. Safe to call more than once.
+func (info *PerThreadInfo) Close() {
+	if info.ptr != nil {
+		C.texturesystem_destroy_thread_info(info.ts.ptr, info.ptr)
+		info.ptr = nil
+		runtime.SetFinalizer(info, nil)
+	}
+}
+
+func threadInfoPtr(info *PerThreadInfo) *C.PerThreadInfo {
+	if info == nil {
+		return nil
+	}
+	return info.ptr
+}
+
+// TextureHandle is a pre-resolved reference to a texture file, obtained via
+// TextureSystem.GetTextureHandle. Reusing a handle (together with a
+// PerThreadInfo) across many lookups skips the per-call filename hash/lookup
+// that Texture/Texture3D/Environment/GetTextureInfo* otherwise repeat every
+// time. Useful in a renderer's inner shading loop where the same texture is
+// looked up repeatedly. The handle is owned by the TextureSystem: it remains
+// valid for the TextureSystem's lifetime and must not be closed.
+type TextureHandle struct {
+	ts  *TextureSystem
+	ptr *C.TextureHandle
+}
+
+// GetTextureHandle resolves filename once for reuse across many lookups.
+// thread may be nil, at a throughput cost (see PerThreadInfo). Resolution is
+// lazy: this rarely fails, even for a nonexistent file.
+// A missing/unopenable file only surfaces as an error from the first actual
+// lookup (Texture, Texture3D, Environment, or GetTextureInfo*) through the
+// returned handle.
+func (ts *TextureSystem) GetTextureHandle(filename string, thread *PerThreadInfo) (*TextureHandle, error) {
+	cFilename := C.CString(filename)
+	defer C.free(unsafe.Pointer(cFilename))
+
+	var errorMsg *C.char
+	ptr := C.texturesystem_get_texture_handle(ts.ptr, cFilename, threadInfoPtr(thread), &errorMsg)
+	if ptr == nil {
+		if errorMsg != nil {
+			err := C.GoString(errorMsg)
+			C.free(unsafe.Pointer(errorMsg))
+			return nil, fmt.Errorf("failed to resolve texture handle for %q: %s", filename, err)
+		}
+		return nil, fmt.Errorf("failed to resolve texture handle for %q", filename)
+	}
+	return &TextureHandle{ts: ts, ptr: ptr}, nil
+}
+
+// Texture is the TextureHandle fast-path equivalent of TextureSystem.Texture.
+func (h *TextureHandle) Texture(thread *PerThreadInfo, opts TextureLookupOptions, s, t, dsdx, dtdx, dsdy, dtdy float32, nchannels int) ([]float32, error) {
+	cOpts := opts.toC()
+	result := make([]float32, nchannels)
+
+	var errorMsg *C.char
+	ret := C.texturesystem_texture_handle(h.ts.ptr, h.ptr, threadInfoPtr(thread), &cOpts,
+		C.float(s), C.float(t), C.float(dsdx), C.float(dtdx), C.float(dsdy), C.float(dtdy),
+		C.int(nchannels), (*C.float)(unsafe.Pointer(&result[0])), &errorMsg)
+	if ret != 0 {
+		if errorMsg != nil {
+			err := C.GoString(errorMsg)
+			C.free(unsafe.Pointer(errorMsg))
+			return nil, fmt.Errorf("texture lookup failed: %s", err)
+		}
+		return nil, fmt.Errorf("texture lookup failed")
+	}
+
+	return result, nil
+}
+
+// Texture3D is the TextureHandle fast-path equivalent of TextureSystem.Texture3D.
+func (h *TextureHandle) Texture3D(thread *PerThreadInfo, opts TextureLookupOptions, p, dpdx, dpdy, dpdz Vec3, nchannels int) ([]float32, error) {
+	cOpts := opts.toC()
+	cP, cDPdx, cDPdy, cDPdz := p.toC(), dpdx.toC(), dpdy.toC(), dpdz.toC()
+	result := make([]float32, nchannels)
+
+	var errorMsg *C.char
+	ret := C.texturesystem_texture3d_handle(h.ts.ptr, h.ptr, threadInfoPtr(thread), &cOpts,
+		&cP[0], &cDPdx[0], &cDPdy[0], &cDPdz[0],
+		C.int(nchannels), (*C.float)(unsafe.Pointer(&result[0])), &errorMsg)
+	if ret != 0 {
+		if errorMsg != nil {
+			err := C.GoString(errorMsg)
+			C.free(unsafe.Pointer(errorMsg))
+			return nil, fmt.Errorf("texture3d lookup failed: %s", err)
+		}
+		return nil, fmt.Errorf("texture3d lookup failed")
+	}
+
+	return result, nil
+}
+
+// Environment is the TextureHandle fast-path equivalent of TextureSystem.Environment.
+func (h *TextureHandle) Environment(thread *PerThreadInfo, opts TextureLookupOptions, r, drdx, drdy Vec3, nchannels int) ([]float32, error) {
+	cOpts := opts.toC()
+	cR, cDRdx, cDRdy := r.toC(), drdx.toC(), drdy.toC()
+	result := make([]float32, nchannels)
+
+	var errorMsg *C.char
+	ret := C.texturesystem_environment_handle(h.ts.ptr, h.ptr, threadInfoPtr(thread), &cOpts,
+		&cR[0], &cDRdx[0], &cDRdy[0],
+		C.int(nchannels), (*C.float)(unsafe.Pointer(&result[0])), &errorMsg)
+	if ret != 0 {
+		if errorMsg != nil {
+			err := C.GoString(errorMsg)
+			C.free(unsafe.Pointer(errorMsg))
+			return nil, fmt.Errorf("environment lookup failed: %s", err)
+		}
+		return nil, fmt.Errorf("environment lookup failed")
+	}
+
+	return result, nil
+}
+
+// GetTextureInfoInt is the TextureHandle fast-path equivalent of
+// TextureSystem.GetTextureInfoInt.
+func (h *TextureHandle) GetTextureInfoInt(thread *PerThreadInfo, dataname string) (int, error) {
+	cDataname := C.CString(dataname)
+	defer C.free(unsafe.Pointer(cDataname))
+
+	var out C.int
+	var errorMsg *C.char
+	ret := C.texturesystem_get_texture_info_handle_int(h.ts.ptr, h.ptr, threadInfoPtr(thread), cDataname, &out, &errorMsg)
+	if ret != 0 {
+		if errorMsg != nil {
+			err := C.GoString(errorMsg)
+			C.free(unsafe.Pointer(errorMsg))
+			return 0, fmt.Errorf("get_texture_info failed: %s", err)
+		}
+		return 0, fmt.Errorf("get_texture_info failed")
+	}
+
+	return int(out), nil
+}
+
+// GetTextureInfoFloat is the TextureHandle fast-path equivalent of
+// TextureSystem.GetTextureInfoFloat.
+func (h *TextureHandle) GetTextureInfoFloat(thread *PerThreadInfo, dataname string) (float32, error) {
+	cDataname := C.CString(dataname)
+	defer C.free(unsafe.Pointer(cDataname))
+
+	var out C.float
+	var errorMsg *C.char
+	ret := C.texturesystem_get_texture_info_handle_float(h.ts.ptr, h.ptr, threadInfoPtr(thread), cDataname, &out, &errorMsg)
+	if ret != 0 {
+		if errorMsg != nil {
+			err := C.GoString(errorMsg)
+			C.free(unsafe.Pointer(errorMsg))
+			return 0, fmt.Errorf("get_texture_info failed: %s", err)
+		}
+		return 0, fmt.Errorf("get_texture_info failed")
+	}
+
+	return float32(out), nil
+}

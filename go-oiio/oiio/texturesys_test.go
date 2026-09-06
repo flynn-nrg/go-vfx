@@ -200,3 +200,67 @@ func TestTextureSystemAttributeUnknown(t *testing.T) {
 		t.Fatalf("expected an error getting an unrecognized attribute")
 	}
 }
+
+func TestTextureSystemHandleLookup(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "flat.png")
+	writeFlatTestTexture(t, path, color.NRGBA{R: 255, G: 128, B: 0, A: 254})
+
+	ts, err := NewTextureSystem()
+	if err != nil {
+		t.Fatalf("NewTextureSystem: %v", err)
+	}
+	defer ts.Close()
+
+	thread := ts.NewPerThreadInfo()
+	defer thread.Close()
+
+	handle, err := ts.GetTextureHandle(path, thread)
+	if err != nil {
+		t.Fatalf("GetTextureHandle: %v", err)
+	}
+
+	opts := NewTextureLookupOptions()
+	viaHandle, err := handle.Texture(thread, opts, 0.5, 0.5, 0, 0, 0, 0, 4)
+	if err != nil {
+		t.Fatalf("handle.Texture: %v", err)
+	}
+	viaFilename, err := ts.Texture(path, opts, 0.5, 0.5, 0, 0, 0, 0, 4)
+	if err != nil {
+		t.Fatalf("ts.Texture: %v", err)
+	}
+	for i := range viaHandle {
+		if viaHandle[i] != viaFilename[i] {
+			t.Fatalf("handle-based and filename-based lookups disagree: %v vs %v", viaHandle, viaFilename)
+		}
+	}
+
+	channels, err := handle.GetTextureInfoInt(thread, "channels")
+	if err != nil {
+		t.Fatalf("handle.GetTextureInfoInt: %v", err)
+	}
+	if channels != 4 {
+		t.Fatalf("expected 4 channels, got %d", channels)
+	}
+}
+
+// GetTextureHandle resolves lazily: it succeeds even for a nonexistent file,
+// and the failure only surfaces on the first actual lookup through the
+// handle (see the doc comment on GetTextureHandle).
+func TestTextureSystemHandleMissingFile(t *testing.T) {
+	ts, err := NewTextureSystem()
+	if err != nil {
+		t.Fatalf("NewTextureSystem: %v", err)
+	}
+	defer ts.Close()
+
+	handle, err := ts.GetTextureHandle("/nonexistent/path/does-not-exist.png", nil)
+	if err != nil {
+		t.Fatalf("GetTextureHandle: %v", err)
+	}
+
+	opts := NewTextureLookupOptions()
+	if _, err := handle.Texture(nil, opts, 0.5, 0.5, 0, 0, 0, 0, 4); err == nil {
+		t.Fatalf("expected an error looking up a missing texture via handle")
+	}
+}
