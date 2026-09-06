@@ -33,10 +33,13 @@ TextureOpt to_oiio_opt(const TextureLookupOptions *opts) {
   opt.subimage = opts->subimage;
   opt.swrap = to_oiio_wrap(opts->swrap);
   opt.twrap = to_oiio_wrap(opts->twrap);
+  opt.rwrap = to_oiio_wrap(opts->rwrap);
   opt.sblur = opts->sblur;
   opt.tblur = opts->tblur;
+  opt.rblur = opts->rblur;
   opt.swidth = opts->swidth;
   opt.twidth = opts->twidth;
+  opt.rwidth = opts->rwidth;
   opt.fill = opts->fill;
   return opt;
 }
@@ -69,6 +72,53 @@ int texturesystem_texture(TextureSystemHandle *handle, const char *filename,
   TextureOpt opt = to_oiio_opt(opts);
   bool ok = handle->ts->texture(ustring(filename), opt, s, t, dsdx, dtdx, dsdy,
                                 dtdy, nchannels, result);
+  if (!ok) {
+    if (error_msg)
+      *error_msg = strdup(handle->ts->geterror().c_str());
+    return 1;
+  }
+  return 0;
+}
+
+int texturesystem_texture3d(TextureSystemHandle *handle, const char *filename,
+                            const TextureLookupOptions *opts, const float *p,
+                            const float *dpdx, const float *dpdy,
+                            const float *dpdz, int nchannels, float *result,
+                            char **error_msg) {
+  if (!handle || !handle->ts) {
+    if (error_msg)
+      *error_msg = strdup("Invalid TextureSystem handle");
+    return 1;
+  }
+  TextureOpt opt = to_oiio_opt(opts);
+  bool ok = handle->ts->texture3d(
+      ustring(filename), opt, V3fParam(p[0], p[1], p[2]),
+      V3fParam(dpdx[0], dpdx[1], dpdx[2]), V3fParam(dpdy[0], dpdy[1], dpdy[2]),
+      V3fParam(dpdz[0], dpdz[1], dpdz[2]), nchannels, result);
+  if (!ok) {
+    if (error_msg)
+      *error_msg = strdup(handle->ts->geterror().c_str());
+    return 1;
+  }
+  return 0;
+}
+
+int texturesystem_environment(TextureSystemHandle *handle,
+                              const char *filename,
+                              const TextureLookupOptions *opts,
+                              const float *r, const float *drdx,
+                              const float *drdy, int nchannels, float *result,
+                              char **error_msg) {
+  if (!handle || !handle->ts) {
+    if (error_msg)
+      *error_msg = strdup("Invalid TextureSystem handle");
+    return 1;
+  }
+  TextureOpt opt = to_oiio_opt(opts);
+  bool ok = handle->ts->environment(
+      ustring(filename), opt, V3fParam(r[0], r[1], r[2]),
+      V3fParam(drdx[0], drdx[1], drdx[2]), V3fParam(drdy[0], drdy[1], drdy[2]),
+      nchannels, result);
   if (!ok) {
     if (error_msg)
       *error_msg = strdup(handle->ts->geterror().c_str());

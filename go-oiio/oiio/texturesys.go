@@ -26,23 +26,24 @@ const (
 )
 
 // TextureLookupOptions mirrors OIIO's TextureOpt fields relevant to a single
-// filtered 2D lookup. Use NewTextureLookupOptions to get OIIO's defaults
-// (notably SWidth/TWidth of 1) rather than a zero-valued struct.
+// filtered lookup. The R fields only apply to Texture3D (volumetric) lookups.
+// Use NewTextureLookupOptions to get OIIO's defaults (notably the width
+// fields at 1) rather than a zero-valued struct.
 type TextureLookupOptions struct {
-	FirstChannel   int
-	Subimage       int
-	SWrap, TWrap   WrapMode
-	SBlur, TBlur   float32
-	SWidth, TWidth float32
-	Fill           float32
+	FirstChannel           int
+	Subimage               int
+	SWrap, TWrap, RWrap    WrapMode
+	SBlur, TBlur, RBlur    float32
+	SWidth, TWidth, RWidth float32
+	Fill                   float32
 }
 
 // NewTextureLookupOptions returns TextureLookupOptions set to OIIO's own
-// defaults. Starting from a zero-valued struct instead would set SWidth/TWidth
-// to 0, disabling derivative-based filtering rather than using OIIO's default
-// multiplier of 1.
+// defaults. Starting from a zero-valued struct instead would set the width
+// fields to 0, disabling derivative-based filtering rather than using OIIO's
+// default multiplier of 1.
 func NewTextureLookupOptions() TextureLookupOptions {
-	return TextureLookupOptions{SWidth: 1, TWidth: 1}
+	return TextureLookupOptions{SWidth: 1, TWidth: 1, RWidth: 1}
 }
 
 func (o TextureLookupOptions) toC() C.TextureLookupOptions {
@@ -51,12 +52,25 @@ func (o TextureLookupOptions) toC() C.TextureLookupOptions {
 		subimage:     C.int(o.Subimage),
 		swrap:        C.TextureWrapMode(o.SWrap),
 		twrap:        C.TextureWrapMode(o.TWrap),
+		rwrap:        C.TextureWrapMode(o.RWrap),
 		sblur:        C.float(o.SBlur),
 		tblur:        C.float(o.TBlur),
+		rblur:        C.float(o.RBlur),
 		swidth:       C.float(o.SWidth),
 		twidth:       C.float(o.TWidth),
+		rwidth:       C.float(o.RWidth),
 		fill:         C.float(o.Fill),
 	}
+}
+
+// Vec3 is a 3-component vector used for Texture3D/Environment lookup
+// coordinates and their screen-space derivatives.
+type Vec3 struct {
+	X, Y, Z float32
+}
+
+func (v Vec3) toC() [3]C.float {
+	return [3]C.float{C.float(v.X), C.float(v.Y), C.float(v.Z)}
 }
 
 // TextureSystem wraps an OIIO::TextureSystem: a filtered, mipmapped,
@@ -121,6 +135,61 @@ func (ts *TextureSystem) Texture(filename string, opts TextureLookupOptions, s, 
 			return nil, fmt.Errorf("texture lookup failed: %s", err)
 		}
 		return nil, fmt.Errorf("texture lookup failed")
+	}
+
+	return result, nil
+}
+
+// Texture3D performs a filtered volumetric lookup at point p, using the
+// screen-space derivatives dpdx/dpdy/dpdz to pick a filter width. This
+// mirrors OSL's texture3d() shadeop. Returns nchannels float32 values.
+func (ts *TextureSystem) Texture3D(filename string, opts TextureLookupOptions, p, dpdx, dpdy, dpdz Vec3, nchannels int) ([]float32, error) {
+	cFilename := C.CString(filename)
+	defer C.free(unsafe.Pointer(cFilename))
+
+	cOpts := opts.toC()
+	cP, cDPdx, cDPdy, cDPdz := p.toC(), dpdx.toC(), dpdy.toC(), dpdz.toC()
+	result := make([]float32, nchannels)
+
+	var errorMsg *C.char
+	ret := C.texturesystem_texture3d(ts.ptr, cFilename, &cOpts,
+		&cP[0], &cDPdx[0], &cDPdy[0], &cDPdz[0],
+		C.int(nchannels), (*C.float)(unsafe.Pointer(&result[0])), &errorMsg)
+	if ret != 0 {
+		if errorMsg != nil {
+			err := C.GoString(errorMsg)
+			C.free(unsafe.Pointer(errorMsg))
+			return nil, fmt.Errorf("texture3d lookup failed: %s", err)
+		}
+		return nil, fmt.Errorf("texture3d lookup failed")
+	}
+
+	return result, nil
+}
+
+// Environment performs a filtered lookup along direction r (a lat-long or
+// cube environment map), using the screen-space derivatives drdx/drdy to pick
+// a filter width. This mirrors OSL's environment() shadeop. Returns
+// nchannels float32 values.
+func (ts *TextureSystem) Environment(filename string, opts TextureLookupOptions, r, drdx, drdy Vec3, nchannels int) ([]float32, error) {
+	cFilename := C.CString(filename)
+	defer C.free(unsafe.Pointer(cFilename))
+
+	cOpts := opts.toC()
+	cR, cDRdx, cDRdy := r.toC(), drdx.toC(), drdy.toC()
+	result := make([]float32, nchannels)
+
+	var errorMsg *C.char
+	ret := C.texturesystem_environment(ts.ptr, cFilename, &cOpts,
+		&cR[0], &cDRdx[0], &cDRdy[0],
+		C.int(nchannels), (*C.float)(unsafe.Pointer(&result[0])), &errorMsg)
+	if ret != 0 {
+		if errorMsg != nil {
+			err := C.GoString(errorMsg)
+			C.free(unsafe.Pointer(errorMsg))
+			return nil, fmt.Errorf("environment lookup failed: %s", err)
+		}
+		return nil, fmt.Errorf("environment lookup failed")
 	}
 
 	return result, nil

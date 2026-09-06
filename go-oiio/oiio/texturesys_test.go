@@ -103,3 +103,43 @@ func TestTextureSystemMissingFile(t *testing.T) {
 		t.Fatalf("expected an error looking up a missing texture")
 	}
 }
+
+func TestTextureSystemEnvironmentLookup(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "flat.png")
+	writeFlatTestTexture(t, path, color.NRGBA{R: 200, G: 100, B: 50, A: 254})
+
+	ts, err := NewTextureSystem()
+	if err != nil {
+		t.Fatalf("NewTextureSystem: %v", err)
+	}
+	defer ts.Close()
+
+	opts := NewTextureLookupOptions()
+	r := Vec3{X: 0, Y: 0, Z: 1}
+	result, err := ts.Environment(path, opts, r, Vec3{}, Vec3{}, 4)
+	if err != nil {
+		t.Fatalf("Environment: %v", err)
+	}
+	if len(result) != 4 {
+		t.Fatalf("expected 4 channels, got %d", len(result))
+	}
+	if !(result[0] > result[1] && result[1] > result[2]) {
+		t.Fatalf("expected R > G > B, got %v", result)
+	}
+}
+
+func TestTextureSystemTexture3DMissingFile(t *testing.T) {
+	ts, err := NewTextureSystem()
+	if err != nil {
+		t.Fatalf("NewTextureSystem: %v", err)
+	}
+	defer ts.Close()
+
+	opts := NewTextureLookupOptions()
+	p := Vec3{X: 0.5, Y: 0.5, Z: 0.5}
+	_, err = ts.Texture3D("/nonexistent/path/does-not-exist.vdb", opts, p, Vec3{}, Vec3{}, Vec3{}, 4)
+	if err == nil {
+		t.Fatalf("expected an error looking up a missing 3D texture")
+	}
+}
