@@ -74,6 +74,30 @@ int texturesystem_get_texture_info_float(TextureSystemHandle *ts,
                                          const char *dataname, float *out,
                                          char **error_msg);
 
+// TextureSystem-wide configuration, e.g. name "searchpath" (string),
+// "max_open_files"/"autotile"/"automip" (int), "max_memory_MB" (float).
+// Returns 0 on success, non-zero if the attribute name/type is not
+// recognized (error message via error_msg, caller must free() it).
+int texturesystem_attribute_int(TextureSystemHandle *ts, const char *name,
+                                int value, char **error_msg);
+int texturesystem_attribute_float(TextureSystemHandle *ts, const char *name,
+                                  float value, char **error_msg);
+int texturesystem_attribute_string(TextureSystemHandle *ts, const char *name,
+                                   const char *value, char **error_msg);
+
+// Reads back TextureSystem-wide configuration set via texturesystem_attribute_*.
+// texturesystem_getattribute_string writes a newly allocated string to *out;
+// the caller must free() it. Returns 0 on success, non-zero if the attribute
+// name/type is not recognized (error message via error_msg, caller must
+// free() it).
+int texturesystem_getattribute_int(TextureSystemHandle *ts, const char *name,
+                                   int *out, char **error_msg);
+int texturesystem_getattribute_float(TextureSystemHandle *ts, const char *name,
+                                     float *out, char **error_msg);
+int texturesystem_getattribute_string(TextureSystemHandle *ts,
+                                      const char *name, char **out,
+                                      char **error_msg);
+
 #ifdef __cplusplus
 }
 #endif

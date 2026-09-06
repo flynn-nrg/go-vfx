@@ -164,3 +164,117 @@ int texturesystem_get_texture_info_float(TextureSystemHandle *handle,
   }
   return 0;
 }
+
+namespace {
+
+// attribute()/getattribute() report failure by returning false without
+// necessarily populating geterror() (an unrecognized attribute name/type is
+// not logged as an error), so fall back to a fixed message.
+char *strdup_error_or(const std::string &err, const char *fallback) {
+  return strdup(err.empty() ? fallback : err.c_str());
+}
+
+} // namespace
+
+int texturesystem_attribute_int(TextureSystemHandle *handle, const char *name,
+                                int value, char **error_msg) {
+  if (!handle || !handle->ts) {
+    if (error_msg)
+      *error_msg = strdup("Invalid TextureSystem handle");
+    return 1;
+  }
+  if (!handle->ts->attribute(name, value)) {
+    if (error_msg)
+      *error_msg = strdup_error_or(handle->ts->geterror(),
+                                   "unrecognized int attribute");
+    return 1;
+  }
+  return 0;
+}
+
+int texturesystem_attribute_float(TextureSystemHandle *handle,
+                                  const char *name, float value,
+                                  char **error_msg) {
+  if (!handle || !handle->ts) {
+    if (error_msg)
+      *error_msg = strdup("Invalid TextureSystem handle");
+    return 1;
+  }
+  if (!handle->ts->attribute(name, value)) {
+    if (error_msg)
+      *error_msg = strdup_error_or(handle->ts->geterror(),
+                                   "unrecognized float attribute");
+    return 1;
+  }
+  return 0;
+}
+
+int texturesystem_attribute_string(TextureSystemHandle *handle,
+                                   const char *name, const char *value,
+                                   char **error_msg) {
+  if (!handle || !handle->ts) {
+    if (error_msg)
+      *error_msg = strdup("Invalid TextureSystem handle");
+    return 1;
+  }
+  if (!handle->ts->attribute(name, string_view(value))) {
+    if (error_msg)
+      *error_msg = strdup_error_or(handle->ts->geterror(),
+                                   "unrecognized string attribute");
+    return 1;
+  }
+  return 0;
+}
+
+int texturesystem_getattribute_int(TextureSystemHandle *handle,
+                                   const char *name, int *out,
+                                   char **error_msg) {
+  if (!handle || !handle->ts) {
+    if (error_msg)
+      *error_msg = strdup("Invalid TextureSystem handle");
+    return 1;
+  }
+  if (!handle->ts->getattribute(name, *out)) {
+    if (error_msg)
+      *error_msg = strdup_error_or(handle->ts->geterror(),
+                                   "unrecognized int attribute");
+    return 1;
+  }
+  return 0;
+}
+
+int texturesystem_getattribute_float(TextureSystemHandle *handle,
+                                     const char *name, float *out,
+                                     char **error_msg) {
+  if (!handle || !handle->ts) {
+    if (error_msg)
+      *error_msg = strdup("Invalid TextureSystem handle");
+    return 1;
+  }
+  if (!handle->ts->getattribute(name, *out)) {
+    if (error_msg)
+      *error_msg = strdup_error_or(handle->ts->geterror(),
+                                   "unrecognized float attribute");
+    return 1;
+  }
+  return 0;
+}
+
+int texturesystem_getattribute_string(TextureSystemHandle *handle,
+                                      const char *name, char **out,
+                                      char **error_msg) {
+  if (!handle || !handle->ts) {
+    if (error_msg)
+      *error_msg = strdup("Invalid TextureSystem handle");
+    return 1;
+  }
+  std::string value;
+  if (!handle->ts->getattribute(name, value)) {
+    if (error_msg)
+      *error_msg = strdup_error_or(handle->ts->geterror(),
+                                   "unrecognized string attribute");
+    return 1;
+  }
+  *out = strdup(value.c_str());
+  return 0;
+}

@@ -143,3 +143,60 @@ func TestTextureSystemTexture3DMissingFile(t *testing.T) {
 		t.Fatalf("expected an error looking up a missing 3D texture")
 	}
 }
+
+func TestTextureSystemAttributes(t *testing.T) {
+	ts, err := NewTextureSystem()
+	if err != nil {
+		t.Fatalf("NewTextureSystem: %v", err)
+	}
+	defer ts.Close()
+
+	if err := ts.SetAttributeInt("max_open_files", 42); err != nil {
+		t.Fatalf("SetAttributeInt: %v", err)
+	}
+	got, err := ts.GetAttributeInt("max_open_files")
+	if err != nil {
+		t.Fatalf("GetAttributeInt: %v", err)
+	}
+	if got != 42 {
+		t.Fatalf("expected max_open_files=42, got %d", got)
+	}
+
+	if err := ts.SetAttributeFloat("max_memory_MB", 128.5); err != nil {
+		t.Fatalf("SetAttributeFloat: %v", err)
+	}
+	gotF, err := ts.GetAttributeFloat("max_memory_MB")
+	if err != nil {
+		t.Fatalf("GetAttributeFloat: %v", err)
+	}
+	if gotF != 128.5 {
+		t.Fatalf("expected max_memory_MB=128.5, got %v", gotF)
+	}
+
+	dir := t.TempDir()
+	if err := ts.SetAttributeString("searchpath", dir); err != nil {
+		t.Fatalf("SetAttributeString: %v", err)
+	}
+	gotS, err := ts.GetAttributeString("searchpath")
+	if err != nil {
+		t.Fatalf("GetAttributeString: %v", err)
+	}
+	if gotS != dir {
+		t.Fatalf("expected searchpath=%q, got %q", dir, gotS)
+	}
+}
+
+func TestTextureSystemAttributeUnknown(t *testing.T) {
+	ts, err := NewTextureSystem()
+	if err != nil {
+		t.Fatalf("NewTextureSystem: %v", err)
+	}
+	defer ts.Close()
+
+	if err := ts.SetAttributeInt("not_a_real_attribute", 1); err == nil {
+		t.Fatalf("expected an error setting an unrecognized attribute")
+	}
+	if _, err := ts.GetAttributeInt("not_a_real_attribute"); err == nil {
+		t.Fatalf("expected an error getting an unrecognized attribute")
+	}
+}

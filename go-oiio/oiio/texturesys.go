@@ -240,3 +240,97 @@ func (ts *TextureSystem) GetTextureInfoFloat(filename, dataname string) (float32
 
 	return float32(out), nil
 }
+
+// SetAttributeInt sets a TextureSystem-wide integer configuration option,
+// e.g. "max_open_files", "autotile", or "automip".
+func (ts *TextureSystem) SetAttributeInt(name string, value int) error {
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+
+	var errorMsg *C.char
+	if C.texturesystem_attribute_int(ts.ptr, cName, C.int(value), &errorMsg) != 0 {
+		return attributeError("set", name, errorMsg)
+	}
+	return nil
+}
+
+// SetAttributeFloat sets a TextureSystem-wide float configuration option,
+// e.g. "max_memory_MB".
+func (ts *TextureSystem) SetAttributeFloat(name string, value float32) error {
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+
+	var errorMsg *C.char
+	if C.texturesystem_attribute_float(ts.ptr, cName, C.float(value), &errorMsg) != 0 {
+		return attributeError("set", name, errorMsg)
+	}
+	return nil
+}
+
+// SetAttributeString sets a TextureSystem-wide string configuration option,
+// e.g. "searchpath" (a colon/semicolon-separated list of directories to
+// search for texture files referenced by relative path).
+func (ts *TextureSystem) SetAttributeString(name, value string) error {
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+	cValue := C.CString(value)
+	defer C.free(unsafe.Pointer(cValue))
+
+	var errorMsg *C.char
+	if C.texturesystem_attribute_string(ts.ptr, cName, cValue, &errorMsg) != 0 {
+		return attributeError("set", name, errorMsg)
+	}
+	return nil
+}
+
+// GetAttributeInt retrieves a TextureSystem-wide integer configuration
+// option previously set via SetAttributeInt (or an OIIO built-in default).
+func (ts *TextureSystem) GetAttributeInt(name string) (int, error) {
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+
+	var out C.int
+	var errorMsg *C.char
+	if C.texturesystem_getattribute_int(ts.ptr, cName, &out, &errorMsg) != 0 {
+		return 0, attributeError("get", name, errorMsg)
+	}
+	return int(out), nil
+}
+
+// GetAttributeFloat retrieves a TextureSystem-wide float configuration
+// option previously set via SetAttributeFloat (or an OIIO built-in default).
+func (ts *TextureSystem) GetAttributeFloat(name string) (float32, error) {
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+
+	var out C.float
+	var errorMsg *C.char
+	if C.texturesystem_getattribute_float(ts.ptr, cName, &out, &errorMsg) != 0 {
+		return 0, attributeError("get", name, errorMsg)
+	}
+	return float32(out), nil
+}
+
+// GetAttributeString retrieves a TextureSystem-wide string configuration
+// option previously set via SetAttributeString (or an OIIO built-in default).
+func (ts *TextureSystem) GetAttributeString(name string) (string, error) {
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+
+	var out *C.char
+	var errorMsg *C.char
+	if C.texturesystem_getattribute_string(ts.ptr, cName, &out, &errorMsg) != 0 {
+		return "", attributeError("get", name, errorMsg)
+	}
+	defer C.free(unsafe.Pointer(out))
+	return C.GoString(out), nil
+}
+
+func attributeError(op, name string, errorMsg *C.char) error {
+	if errorMsg != nil {
+		err := C.GoString(errorMsg)
+		C.free(unsafe.Pointer(errorMsg))
+		return fmt.Errorf("failed to %s attribute %q: %s", op, name, err)
+	}
+	return fmt.Errorf("failed to %s attribute %q", op, name)
+}
